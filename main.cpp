@@ -28,55 +28,50 @@ public:
 //4。根据commitIndex把entry apply到state machine的独立线程，注意这个线程只能读commitIndex不能改
 class instance {
 public:
-    instance(io_service &loop) : A_term(0), A_state(follower), A_timer_candidate_expire(loop),
-                                 F_already_voted(bool), C_grantedVoteNum(0), A_commitIndex(0), A_state_machine(),
-                                 A_acceptor(loop) {}
+    instance(io_service &loop) : ioContext(loop), A_term(0), A_state(follower), F_already_voted(false), A_timer_candidate_expire(loop), C_grantedVoteNum(0), A_commitIndex(0),
+                                 A_state_machine(), A_acceptor(loop) {}
 
     void run() {
-        int waiting_counts = this->A_timer_candidate_expire.expires_from_now(
+        int waiting_counts = A_timer_candidate_expire.expires_from_now(
                 boost::posix_time::seconds(random_candidate_expire()));
-        if (watiing_counts == 0) {
-            // 由于是初始化，不可能为0
+        if (waiting_counts == 0) {
             throw "初始化阶段这里不可能为0";
         } else {
-            this->A_timer_candidate_expire.async_wait([this](const boost::system::error_code &error) -> {
+            A_timer_candidate_expire.async_wait([this](const boost::system::error_code &error) {
                 if (error == boost::asio::error::operation_aborted) {
                     //可能会被在follow_deal_VoteRPC中取消，或者ARPC中取消，但是按照目前看来被cancel什么都不用管，把执行流让给主动cancel定时器的函数就行了
                 } else {
-                    this->trans2candidate();
+                    trans2candidate();
                 }
-            })
+            });
         }
-        this->io.run();
+
+        ioContext.run();
     }
 
 
     void trans2follower(int term) {
-        this->term = term;
-        this->state = follower;
-        int waiting_count = this->A_timer_candidate_expire.expires_from_now(
-                boost::posix_time::seconds(random_candidate_expire()));
+        A_term = term;
+        A_state = follower;
+        int waiting_count = A_timer_candidate_expire.expires_from_now(boost::posix_time::seconds(random_candidate_expire()));
         if (waiting_count == 0) {
-            throw exception("trans2follower是因为收到了外界rpc切换成follower，所以至少有一个cb_tran2_candidate的定时器，否则就是未考虑的情况");
+            throw "trans2follower是因为收到了外界rpc切换成follower，所以至少有一个cb_tran2_candidate的定时器，否则就是未考虑的情况";
         }
- 9
-        this->A_timer_candidate_expire.async_wait([this](const boost::system::error_code &error) -> {
+        A_timer_candidate_expire.async_wait([this](const boost::system::error_code &error) {
             if (error == boost::asio::error::operation_aborted) {
                 //啥都不做，让react处理
             } else {
-                this->trans2candidate();
+                trans2candidate();
             }
-        })
-
+        });
     }
 
     void trans2candidate() {
-        this->term++;
-        this->state = candidate;
-        this->grantedVoteNum = 1;
+        A_term++;
+        A_state = candidate;
+        C_grantedVoteNum = 1;
         //设置下一个term candidate的定时器
-        int waiting_count = this->A_timer_candidate_expire.expires_from_now(
-                boost::posix_time::seconds(random_candidate_expire()));
+        int waiting_count = A_timer_candidate_expire.expires_from_now(boost::posix_time::seconds(random_candidate_expire()));
         if (waiting_count == 0) {
             //完全可能出现这种情况，如果是cb_trans2_candidate的定时器自然到期，waiting_count就是0
             //leave behind
@@ -86,27 +81,24 @@ public:
         requestVotesCall();
     }
 
-    void VoteRPC
-    -
-
     void follower_react2_VoteRPC(int term, int logindex, int logterm) {
-        if (this->term > term) {
+        if (A_term > term) {
             //how to do RPC ??????????
 //            send back (false, term)
             return;
         }
-        if (this->term < term) {
+        if (A_term < term) {
             //trans to follower,
-            this->trans2follower(term)
+            trans2follower(term);
 //          no return; 不return，因为还要投票
         }
-        //这里是this->term <= term的情况，
-        if (this->F_already_voted == false) {  //这个if针对 this->term == term 的情况，只有一票
+        //这里是A_term <= term的情况，
+        if (F_already_voted == false) {  //这个if针对 A_term == term 的情况，只有一票
             bool should_vote = false;
-            if (this->entries.size() == 0) { //只管投票
+            if (entries.size() == 0) { //只管投票
                 should_vote = true;
             } else {
-                Entry lastEntry = this->enties[this->enties.size() - 1];
+                Entry lastEntry = entries[entries.size() - 1];
                 if (lastEntry.term > logterm) {
                     should_vote = false;
                 } else if (lastEntry.term < logterm) {
@@ -133,38 +125,40 @@ public:
 
     void follower_react_2_AppendEntry_RPC(int term, Entry entry, int prelog_term, int prelog_index, int commitIndex) {
         // 这行错了!       assert(commitIndex <= prelog_index); 完全有可能出现commitIndex比prelog_index大的情况
-        if (this->term > term) {
-//            sendback(false, this->term))
+        if (A_term > term) {
+//            sendback(false, A_term))
             return; //啥都不做，退出
-        } else { //this->term <= term
+        } else { //A_term <= term
             trans2follower(term);//会设置定时器，所以此函数不需要设置定时器了
             //一开始想法是commitIndex直接赋值给本地commitIndex，然后本地有一个线程直接根据本第commitIndex闷头apply to stateMachine就行了（因为两者完全正交），
             // 但是一想不对，因为rpc的commitIndex可能比prelog_index大，假设本地和主同步的entry是0到20，21到100都是stale的entry，rpc传来一个commitIndex为50，prelog_index为80（还没走到真确的20），难道那
             // 个线程就无脑把到80的entry给apply了？所以本地的commitIndex只能是
-            int last_index = this->enties.size() - 1;
+            int last_index = entries.size() - 1;
             if (last_index < prelog_index) {
-                // sendback(false,this->term)
+                // sendback(false,A_term)
                 return;
             } else { // if (last_index >= prelog_index)  注意> 和 = 的情况是一样的，（至少目前我是这么认为的）
-                if (this->enties[prelog_index].term < prelog_term) {
-                    //no this->entry.delete_behind 并不需要操作entry，等到相等的term再操作也不迟
-                    //sendback(false, this->term) //这里的term还有用么。。。 已经变成Primary的term了
-                    //no this->commitIndex=commitIndex;
+                if (entries[prelog_index].term < prelog_term) {
+                    //no entry.delete_behind 并不需要操作entry，等到相等的term再操作也不迟
+                    //sendback(false, A_term) //这里的term还有用么。。。 已经变成Primary的term了
+                    //no commitIndex=commitIndex;
                     return;
-                } else if (this->enties[prelog_index].term == prelog_term) {
-                    // no this->commitIndex = commitIndex; //还不能跟新，如果apply 线程神速怎么办，还没来的急会滚就apply了
+                } else if (entries[prelog_index].term == prelog_term) {
+                    // no commitIndex = commitIndex; //还不能跟新，如果apply 线程神速怎么办，还没来的急会滚就apply了
                     //sendback(true,term);
-                    //this->entry.delete_behind(prelog_index)
-                    //this->entry.append(entry)
-                    this->commitIndex = commitIndex;  //stale的数据回滚了，现在apply线程可以开始干活了
+                    //entry.delete_behind(prelog_index)
+                    //entry.append(entry)
+                    A_commitIndex = commitIndex;  //stale的数据回滚了，现在apply线程可以开始干活了
                 } else {
-                    throw exception("出现了完全不可能出现的情况")
+                    throw "出现了完全不可能出现的情况";
                 }
             }
         }
     }
 
+    void cb_accept(const boost::){
 
+    }
 //    需要id作为入参数么，Follower只根据term判断是否可能接受log，如果保证一个term只有一个Primary，则不需要id，（由于我的想法中是这样的，所以先不加上）
     void AppendEntry_RPC(int term, int prelog_term, int prevlog_index, string log) {
 //      send
@@ -203,7 +197,8 @@ public:
     int A_commitIndex;//都需要报错，从follower上位成primary需要
     StateMachine A_state_machine;
     tcp::acceptor A_acceptor;
-
+    io_context &ioContext;
+    Entries entries;
     // todo configuration list:{ip,port}
 
 };

@@ -3,7 +3,6 @@ project(raft)
 
 set(CMAKE_CXX_STANDARD 14)
 
-
 set(BOOST_ROOT /Users/ynx/boost/build)
 #include_directories(/Users/ynx/boost/build/include)
 #link_directories(/Users/ynx/boost/build/lib)
