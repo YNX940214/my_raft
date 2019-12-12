@@ -3,11 +3,13 @@
 #include <string>
 #include <boost/asio.hpp>
 #include "util.h"
+#include <iostream>
+#include "log/boost_lop.h"
+#include "rpc/rpc.h"
 
 using namespace boost::asio;
 using namespace std;
 using boost::asio::ip::tcp;
-
 enum State {
     follower, candidate, primary
 };
@@ -19,9 +21,10 @@ public:
     int term;
     int index;
 };
+
 //-1。 目前最当务之急的问题是弄清楚如何rpc，我现在是sendback这样操作的（这是最自然的，这个sendback是对触发这个函数的rpc的sendback，如何抽象是个问题）
 //并考虑如下例子中的场景，a 发出vote rpc， b收到，发回， 回到前不久a收到qurom的vote，变身成主，如何用rpc表示。思考sendback除了ok和term是否还要返回别的信息
-
+//
 //0. log 是个问题，boost的log编译失败 log的基本修养 time level file line function msg
 //2. entry是个class，操作entry会写入磁盘，是一个对文件的封装
 //3. 先把程序跑起来，做出第一次选举。
@@ -29,11 +32,11 @@ public:
 class instance {
 public:
     instance(io_service &loop) : ioContext(loop), A_term(0), A_state(follower), F_already_voted(false), A_timer_candidate_expire(loop), C_grantedVoteNum(0), A_commitIndex(0),
-                                 A_state_machine(), A_acceptor(loop) {}
+                                 A_state_machine(), A_acceptor(loop), A_network(loop) {}
 
     void run() {
-        int waiting_counts = A_timer_candidate_expire.expires_from_now(
-                boost::posix_time::seconds(random_candidate_expire()));
+        A_network.startAccept(std::bind(&instance::reactToIncomingMsg, this, std::placeholders::_1));
+        int waiting_counts = A_timer_candidate_expire.expires_from_now(boost::posix_time::seconds(random_candidate_expire()));
         if (waiting_counts == 0) {
             throw "初始化阶段这里不可能为0";
         } else {
@@ -45,10 +48,25 @@ public:
                 }
             });
         }
-
         ioContext.run();
     }
 
+
+    void reactToIncomingMsg(string msg) {
+        //proto buf decode
+        string action = msg["action"];
+        if (action == "RequestVoteRPC") {
+
+        } else if (action == "AppendEntryRPC") {
+
+        } else if (action == "Resp_RequestVoteRPC") {
+
+        } else if (action == "Resp_AppendEntryRPC") {
+
+        } else {
+            BOOST_LOG_TRIVIAL(error) << "unknown action: " + action + ", the whole msg string is:\n" + msg;
+        }
+    }
 
     void trans2follower(int term) {
         A_term = term;
@@ -156,9 +174,7 @@ public:
         }
     }
 
-    void cb_accept(const boost::){
 
-    }
 //    需要id作为入参数么，Follower只根据term判断是否可能接受log，如果保证一个term只有一个Primary，则不需要id，（由于我的想法中是这样的，所以先不加上）
     void AppendEntry_RPC(int term, int prelog_term, int prevlog_index, string log) {
 //      send
@@ -190,6 +206,7 @@ public:
 
 
     //follower 和 candidate 才需要的
+    RPC A_network;
     deadline_timer A_timer_candidate_expire;
     int A_term;
     State A_state;
@@ -204,6 +221,12 @@ public:
 };
 
 int main() {
-    std::cout << "Hello, World!" << std::endl;
+    init_logging();
+    BOOST_LOG_TRIVIAL(trace) << "This is a trace severity message";
+    BOOST_LOG_TRIVIAL(debug) << "This is a debug severity message";
+    BOOST_LOG_TRIVIAL(info) << "This is an informational severity message";
+    BOOST_LOG_TRIVIAL(warning) << "This is a warning severity message";
+    BOOST_LOG_TRIVIAL(error) << "This is an error severity message";
+    BOOST_LOG_TRIVIAL(fatal) << "and this is a fatal severity message";
     return 0;
 }
