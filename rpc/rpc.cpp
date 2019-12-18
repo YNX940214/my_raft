@@ -8,10 +8,10 @@ string __get_ip_from_socket__(tcp::socket &peer) {
     return ip;
 }
 
-RPC::RPC(boost::asio::io_context &io, std::function<void(string)> cb) : _acceptor(io), io(io), cb(cb) {
+RPC::RPC(boost::asio::io_context &io, std::function<void(RPC_TYPE, string, string, int)> cb) : _acceptor(io), io(io), cb(cb) {
 }
 
-void RPC::writeTo(string ip, int port, string rpc_msg, std::function<void(bool)> cb) {
+void RPC::writeTo(string ip, int port, string rpc_msg, std::function<void (boost::system::error_code &ec, std::size_t)> cb) {
     try {
         //如果网络不可达到，tcp建立链接不能成功
         getConnection(ip, port, cb);
@@ -76,6 +76,7 @@ void RPC::body_callback(tcp::socket peer, const boost::system::error_code &error
     } else {
         string msg(big_char, bytes_transferred);
         cb(rpc_type, msg);
+        //一定要运行这句，如果cb抛出异常就不行了
         read_header(std::move(peer));
     }
 

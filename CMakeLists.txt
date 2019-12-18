@@ -5,11 +5,29 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_FLAGS " -DBOOST_LOG_DYN_LINK")
 
 set(BOOST_ROOT /Users/ynx/boost/build)
-#include_directories(/Users/ynx/boost/build/include)
-#link_directories(/Users/ynx/boost/build/lib)
+include(FindProtobuf)
+find_package(protobuf REQUIRED)
+
+if (protobuf_VERBOSE)
+    message(STATUS "Using Protocol Buffers ${Protobuf_VERSION}")
+endif ()
+
 
 find_package(Boost COMPONENTS log log_setup REQUIED)
 include_directories(${Boost_INCLUDE_DIRS})
-#add_executable(raft main.cpp log/boost_lop.cpp rpc/rpc.cpp)
-target_link_libraries(raft pthread ${Boost_LOG_LIBRARY} ${Boost_LOG_SETUP_LIBRARY} ${Boost_FILE_SYSTEM_LIBRARY} ${Boost_THREAD_LIBRARY} ${Boost_SYSTEM_LIBRARY})
 
+
+#Code Generation
+if (protobuf_MODULE_COMPATIBLE) #Legacy Support
+    protobuf_generate_cpp(main_PROTO_SRCS main_PROTO_HDRS rpc.proto)
+    list(APPEND main_SRCS ${main_PROTO_SRCS} ${main_PROTO_HDRS})
+endif ()
+add_executable(raft main.cpp log/boost_lop.cpp rpc/rpc.cpp rpc.proto entry.cpp entry.h StateMachine.cpp StateMachine.h)
+
+if (protobuf_MODULE_COMPATIBLE) #Legacy mode
+    target_include_directories(raft PUBLIC ${PROTOBUF_INCLUDE_DIRS})
+    target_link_libraries(raft ${PROTOBUF_LIBRARIES})
+else ()
+    target_link_libraries(raft protobuf::libprotobuf ${Boost_LOG_LIBRARY} ${Boost_LOG_SETUP_LIBRARY} ${Boost_FILE_SYSTEM_LIBRARY} ${Boost_THREAD_LIBRARY} ${Boost_SYSTEM_LIBRARY})
+    protobuf_generate(TARGET raft)
+endif ()
