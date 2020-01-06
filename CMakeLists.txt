@@ -22,7 +22,7 @@ if (protobuf_MODULE_COMPATIBLE) #Legacy Support
     protobuf_generate_cpp(main_PROTO_SRCS main_PROTO_HDRS rpc.proto)
     list(APPEND main_SRCS ${main_PROTO_SRCS} ${main_PROTO_HDRS})
 endif ()
-add_executable(raft main.cpp log/boost_lop.cpp rpc/rpc.cpp rpc.proto entry.cpp entry.h StateMachine.cpp StateMachine.h)
+add_executable(raft main.cpp log/boost_lop.cpp rpc/rpc.cpp rpc.proto entry.cpp entry.h StateMachine.cpp StateMachine.h const.h)
 
 if (protobuf_MODULE_COMPATIBLE) #Legacy mode
     target_include_directories(raft PUBLIC ${PROTOBUF_INCLUDE_DIRS})

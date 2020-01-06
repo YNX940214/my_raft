@@ -42,7 +42,7 @@ private:
     RPC_TYPE rpc_type;
     std::function<void(RPC_TYPE, string msg, string ip, int port)> cb;
     char big_char[max_body_length];
-    char meta_char[8];
+    char meta_char[4];
     std::map<string, tcp::socket> _connection_map;
     tcp::acceptor _acceptor; //acceptor和接收的逻辑其实可以分离，但是accept的connection可以存到连接池里
 };

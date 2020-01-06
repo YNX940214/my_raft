@@ -13,18 +13,17 @@ using std::string;
 
 class Entry {
 public:
-    unsigned Term();
-
-    unsigned Index();
+    unsigned get_term();
 
 private:
     unsigned term;
-    unsigned index;
     string data;
 };
 
 class Entries {
 public:
+    Entry get(int index);
+
     unsigned get_commit_index();
 
     void insert(unsigned prelog_index, Entry &entry); //同步接口,自动根据插入位置插入，并删除插入位置之后的entry

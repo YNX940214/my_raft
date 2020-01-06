@@ -120,6 +120,7 @@ const ::PROTOBUF_NAMESPACE_ID::uint32 TableStruct_rpc_2eproto::offsets[] PROTOBU
   ~0u,  // no _weak_field_map_
   PROTOBUF_FIELD_OFFSET(::raft_rpc::rpc_Entry, term_),
   PROTOBUF_FIELD_OFFSET(::raft_rpc::rpc_Entry, msg_),
+  PROTOBUF_FIELD_OFFSET(::raft_rpc::rpc_Entry, lsn_),
   ~0u,  // no _has_bits_
   PROTOBUF_FIELD_OFFSET(::raft_rpc::AppendEntryRpc, _internal_metadata_),
   ~0u,  // no _extensions_
@@ -128,9 +129,9 @@ const ::PROTOBUF_NAMESPACE_ID::uint32 TableStruct_rpc_2eproto::offsets[] PROTOBU
   PROTOBUF_FIELD_OFFSET(::raft_rpc::AppendEntryRpc, term_),
   PROTOBUF_FIELD_OFFSET(::raft_rpc::AppendEntryRpc, index_),
   PROTOBUF_FIELD_OFFSET(::raft_rpc::AppendEntryRpc, prelog_term_),
-  PROTOBUF_FIELD_OFFSET(::raft_rpc::AppendEntryRpc, prelog_index_),
   PROTOBUF_FIELD_OFFSET(::raft_rpc::AppendEntryRpc, commit_index_),
   PROTOBUF_FIELD_OFFSET(::raft_rpc::AppendEntryRpc, entry_),
+  PROTOBUF_FIELD_OFFSET(::raft_rpc::AppendEntryRpc, lsn_),
   ~0u,  // no _has_bits_
   PROTOBUF_FIELD_OFFSET(::raft_rpc::Resp_AppendEntryRPC, _internal_metadata_),
   ~0u,  // no _extensions_
@@ -138,6 +139,7 @@ const ::PROTOBUF_NAMESPACE_ID::uint32 TableStruct_rpc_2eproto::offsets[] PROTOBU
   ~0u,  // no _weak_field_map_
   PROTOBUF_FIELD_OFFSET(::raft_rpc::Resp_AppendEntryRPC, ok_),
   PROTOBUF_FIELD_OFFSET(::raft_rpc::Resp_AppendEntryRPC, term_),
+  PROTOBUF_FIELD_OFFSET(::raft_rpc::Resp_AppendEntryRPC, lsn_),
   ~0u,  // no _has_bits_
   PROTOBUF_FIELD_OFFSET(::raft_rpc::RequestVoteRpc, _internal_metadata_),
   ~0u,  // no _extensions_
@@ -145,6 +147,7 @@ const ::PROTOBUF_NAMESPACE_ID::uint32 TableStruct_rpc_2eproto::offsets[] PROTOBU
   ~0u,  // no _weak_field_map_
   PROTOBUF_FIELD_OFFSET(::raft_rpc::RequestVoteRpc, term_),
   PROTOBUF_FIELD_OFFSET(::raft_rpc::RequestVoteRpc, index_),
+  PROTOBUF_FIELD_OFFSET(::raft_rpc::RequestVoteRpc, lsn_),
   ~0u,  // no _has_bits_
   PROTOBUF_FIELD_OFFSET(::raft_rpc::Resp_RequestVoteRpc, _internal_metadata_),
   ~0u,  // no _extensions_
@@ -152,13 +155,14 @@ const ::PROTOBUF_NAMESPACE_ID::uint32 TableStruct_rpc_2eproto::offsets[] PROTOBU
   ~0u,  // no _weak_field_map_
   PROTOBUF_FIELD_OFFSET(::raft_rpc::Resp_RequestVoteRpc, ok_),
   PROTOBUF_FIELD_OFFSET(::raft_rpc::Resp_RequestVoteRpc, term_),
+  PROTOBUF_FIELD_OFFSET(::raft_rpc::Resp_RequestVoteRpc, lsn_),
 };
 static const ::PROTOBUF_NAMESPACE_ID::internal::MigrationSchema schemas[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) = {
   { 0, -1, sizeof(::raft_rpc::rpc_Entry)},
-  { 7, -1, sizeof(::raft_rpc::AppendEntryRpc)},
-  { 18, -1, sizeof(::raft_rpc::Resp_AppendEntryRPC)},
-  { 25, -1, sizeof(::raft_rpc::RequestVoteRpc)},
-  { 32, -1, sizeof(::raft_rpc::Resp_RequestVoteRpc)},
+  { 8, -1, sizeof(::raft_rpc::AppendEntryRpc)},
+  { 19, -1, sizeof(::raft_rpc::Resp_AppendEntryRPC)},
+  { 27, -1, sizeof(::raft_rpc::RequestVoteRpc)},
+  { 35, -1, sizeof(::raft_rpc::Resp_RequestVoteRpc)},
 };
 
 static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] = {
@@ -170,16 +174,17 @@ static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] =
 };
 
 const char descriptor_table_protodef_rpc_2eproto[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) =
-  "\n\trpc.proto\022\010raft_rpc\"&\n\trpc_Entry\022\014\n\004te"
-  "rm\030\001 \001(\005\022\013\n\003msg\030\002 \001(\t\"\222\001\n\016AppendEntryRpc"
-  "\022\014\n\004term\030\001 \001(\005\022\r\n\005index\030\002 \001(\005\022\023\n\013prelog_"
-  "term\030\003 \001(\005\022\024\n\014prelog_index\030\004 \001(\005\022\024\n\014comm"
-  "it_index\030\005 \001(\005\022\"\n\005entry\030\006 \003(\0132\023.raft_rpc"
-  ".rpc_Entry\"/\n\023Resp_AppendEntryRPC\022\n\n\002ok\030"
-  "\001 \001(\010\022\014\n\004term\030\002 \001(\005\"-\n\016RequestVoteRpc\022\014\n"
-  "\004term\030\001 \001(\005\022\r\n\005index\030\002 \001(\005\"/\n\023Resp_Reque"
-  "stVoteRpc\022\n\n\002ok\030\001 \001(\010\022\014\n\004term\030\002 \001(\005b\006pro"
-  "to3"
+  "\n\trpc.proto\022\010raft_rpc\"3\n\trpc_Entry\022\014\n\004te"
+  "rm\030\001 \001(\005\022\013\n\003msg\030\002 \001(\t\022\013\n\003lsn\030\003 \001(\005\"\211\001\n\016A"
+  "ppendEntryRpc\022\014\n\004term\030\001 \001(\005\022\r\n\005index\030\002 \001"
+  "(\005\022\023\n\013prelog_term\030\003 \001(\005\022\024\n\014commit_index\030"
+  "\005 \001(\005\022\"\n\005entry\030\006 \003(\0132\023.raft_rpc.rpc_Entr"
+  "y\022\013\n\003lsn\030\007 \001(\005\"<\n\023Resp_AppendEntryRPC\022\n\n"
+  "\002ok\030\001 \001(\010\022\014\n\004term\030\002 \001(\005\022\013\n\003lsn\030\003 \001(\005\":\n\016"
+  "RequestVoteRpc\022\014\n\004term\030\001 \001(\005\022\r\n\005index\030\002 "
+  "\001(\005\022\013\n\003lsn\030\003 \001(\005\"<\n\023Resp_RequestVoteRpc\022"
+  "\n\n\002ok\030\001 \001(\010\022\014\n\004term\030\002 \001(\005\022\013\n\003lsn\030\003 \001(\005b\006"
+  "proto3"
   ;
 static const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable*const descriptor_table_rpc_2eproto_deps[1] = {
 };
@@ -193,7 +198,7 @@ static ::PROTOBUF_NAMESPACE_ID::internal::SCCInfoBase*const descriptor_table_rpc
 static ::PROTOBUF_NAMESPACE_ID::internal::once_flag descriptor_table_rpc_2eproto_once;
 static bool descriptor_table_rpc_2eproto_initialized = false;
 const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable descriptor_table_rpc_2eproto = {
-  &descriptor_table_rpc_2eproto_initialized, descriptor_table_protodef_rpc_2eproto, "rpc.proto", 363,
+  &descriptor_table_rpc_2eproto_initialized, descriptor_table_protodef_rpc_2eproto, "rpc.proto", 406,
   &descriptor_table_rpc_2eproto_once, descriptor_table_rpc_2eproto_sccs, descriptor_table_rpc_2eproto_deps, 5, 0,
   schemas, file_default_instances, TableStruct_rpc_2eproto::offsets,
   file_level_metadata_rpc_2eproto, 5, file_level_enum_descriptors_rpc_2eproto, file_level_service_descriptors_rpc_2eproto,
@@ -224,14 +229,18 @@ rpc_Entry::rpc_Entry(const rpc_Entry& from)
   if (!from._internal_msg().empty()) {
     msg_.AssignWithDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), from.msg_);
   }
-  term_ = from.term_;
+  ::memcpy(&term_, &from.term_,
+    static_cast<size_t>(reinterpret_cast<char*>(&lsn_) -
+    reinterpret_cast<char*>(&term_)) + sizeof(lsn_));
   // @@protoc_insertion_point(copy_constructor:raft_rpc.rpc_Entry)
 }
 
 void rpc_Entry::SharedCtor() {
   ::PROTOBUF_NAMESPACE_ID::internal::InitSCC(&scc_info_rpc_Entry_rpc_2eproto.base);
   msg_.UnsafeSetDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited());
-  term_ = 0;
+  ::memset(&term_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&lsn_) -
+      reinterpret_cast<char*>(&term_)) + sizeof(lsn_));
 }
 
 rpc_Entry::~rpc_Entry() {
@@ -259,7 +268,9 @@ void rpc_Entry::Clear() {
   (void) cached_has_bits;
 
   msg_.ClearToEmptyNoArena(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited());
-  term_ = 0;
+  ::memset(&term_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&lsn_) -
+      reinterpret_cast<char*>(&term_)) + sizeof(lsn_));
   _internal_metadata_.Clear();
 }
 
@@ -283,6 +294,13 @@ const char* rpc_Entry::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::
           auto str = _internal_mutable_msg();
           ptr = ::PROTOBUF_NAMESPACE_ID::internal::InlineGreedyStringParser(str, ptr, ctx);
           CHK_(::PROTOBUF_NAMESPACE_ID::internal::VerifyUTF8(str, "raft_rpc.rpc_Entry.msg"));
+          CHK_(ptr);
+        } else goto handle_unusual;
+        continue;
+      // int32 lsn = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 24)) {
+          lsn_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint(&ptr);
           CHK_(ptr);
         } else goto handle_unusual;
         continue;
@@ -328,6 +346,12 @@ failure:
         2, this->_internal_msg(), target);
   }
 
+  // int32 lsn = 3;
+  if (this->lsn() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(3, this->_internal_lsn(), target);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
         _internal_metadata_.unknown_fields(), target, stream);
@@ -356,6 +380,13 @@ size_t rpc_Entry::ByteSizeLong() const {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32Size(
         this->_internal_term());
+  }
+
+  // int32 lsn = 3;
+  if (this->lsn() != 0) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32Size(
+        this->_internal_lsn());
   }
 
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
@@ -396,6 +427,9 @@ void rpc_Entry::MergeFrom(const rpc_Entry& from) {
   if (from.term() != 0) {
     _internal_set_term(from._internal_term());
   }
+  if (from.lsn() != 0) {
+    _internal_set_lsn(from._internal_lsn());
+  }
 }
 
 void rpc_Entry::CopyFrom(const ::PROTOBUF_NAMESPACE_ID::Message& from) {
@@ -422,6 +456,7 @@ void rpc_Entry::InternalSwap(rpc_Entry* other) {
   msg_.Swap(&other->msg_, &::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(),
     GetArenaNoVirtual());
   swap(term_, other->term_);
+  swap(lsn_, other->lsn_);
 }
 
 ::PROTOBUF_NAMESPACE_ID::Metadata rpc_Entry::GetMetadata() const {
@@ -448,16 +483,16 @@ AppendEntryRpc::AppendEntryRpc(const AppendEntryRpc& from)
       entry_(from.entry_) {
   _internal_metadata_.MergeFrom(from._internal_metadata_);
   ::memcpy(&term_, &from.term_,
-    static_cast<size_t>(reinterpret_cast<char*>(&commit_index_) -
-    reinterpret_cast<char*>(&term_)) + sizeof(commit_index_));
+    static_cast<size_t>(reinterpret_cast<char*>(&lsn_) -
+    reinterpret_cast<char*>(&term_)) + sizeof(lsn_));
   // @@protoc_insertion_point(copy_constructor:raft_rpc.AppendEntryRpc)
 }
 
 void AppendEntryRpc::SharedCtor() {
   ::PROTOBUF_NAMESPACE_ID::internal::InitSCC(&scc_info_AppendEntryRpc_rpc_2eproto.base);
   ::memset(&term_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&commit_index_) -
-      reinterpret_cast<char*>(&term_)) + sizeof(commit_index_));
+      reinterpret_cast<char*>(&lsn_) -
+      reinterpret_cast<char*>(&term_)) + sizeof(lsn_));
 }
 
 AppendEntryRpc::~AppendEntryRpc() {
@@ -485,8 +520,8 @@ void AppendEntryRpc::Clear() {
 
   entry_.Clear();
   ::memset(&term_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&commit_index_) -
-      reinterpret_cast<char*>(&term_)) + sizeof(commit_index_));
+      reinterpret_cast<char*>(&lsn_) -
+      reinterpret_cast<char*>(&term_)) + sizeof(lsn_));
   _internal_metadata_.Clear();
 }
 
@@ -518,13 +553,6 @@ const char* AppendEntryRpc::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE
           CHK_(ptr);
         } else goto handle_unusual;
         continue;
-      // int32 prelog_index = 4;
-      case 4:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 32)) {
-          prelog_index_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint(&ptr);
-          CHK_(ptr);
-        } else goto handle_unusual;
-        continue;
       // int32 commit_index = 5;
       case 5:
         if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 40)) {
@@ -542,6 +570,13 @@ const char* AppendEntryRpc::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE
             CHK_(ptr);
             if (!ctx->DataAvailable(ptr)) break;
           } while (::PROTOBUF_NAMESPACE_ID::internal::ExpectTag<50>(ptr));
+        } else goto handle_unusual;
+        continue;
+      // int32 lsn = 7;
+      case 7:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 56)) {
+          lsn_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint(&ptr);
+          CHK_(ptr);
         } else goto handle_unusual;
         continue;
       default: {
@@ -588,12 +623,6 @@ failure:
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(3, this->_internal_prelog_term(), target);
   }
 
-  // int32 prelog_index = 4;
-  if (this->prelog_index() != 0) {
-    target = stream->EnsureSpace(target);
-    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(4, this->_internal_prelog_index(), target);
-  }
-
   // int32 commit_index = 5;
   if (this->commit_index() != 0) {
     target = stream->EnsureSpace(target);
@@ -606,6 +635,12 @@ failure:
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
       InternalWriteMessage(6, this->_internal_entry(i), target, stream);
+  }
+
+  // int32 lsn = 7;
+  if (this->lsn() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(7, this->_internal_lsn(), target);
   }
 
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
@@ -652,18 +687,18 @@ size_t AppendEntryRpc::ByteSizeLong() const {
         this->_internal_prelog_term());
   }
 
-  // int32 prelog_index = 4;
-  if (this->prelog_index() != 0) {
-    total_size += 1 +
-      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32Size(
-        this->_internal_prelog_index());
-  }
-
   // int32 commit_index = 5;
   if (this->commit_index() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32Size(
         this->_internal_commit_index());
+  }
+
+  // int32 lsn = 7;
+  if (this->lsn() != 0) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32Size(
+        this->_internal_lsn());
   }
 
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
@@ -707,11 +742,11 @@ void AppendEntryRpc::MergeFrom(const AppendEntryRpc& from) {
   if (from.prelog_term() != 0) {
     _internal_set_prelog_term(from._internal_prelog_term());
   }
-  if (from.prelog_index() != 0) {
-    _internal_set_prelog_index(from._internal_prelog_index());
-  }
   if (from.commit_index() != 0) {
     _internal_set_commit_index(from._internal_commit_index());
+  }
+  if (from.lsn() != 0) {
+    _internal_set_lsn(from._internal_lsn());
   }
 }
 
@@ -740,8 +775,8 @@ void AppendEntryRpc::InternalSwap(AppendEntryRpc* other) {
   swap(term_, other->term_);
   swap(index_, other->index_);
   swap(prelog_term_, other->prelog_term_);
-  swap(prelog_index_, other->prelog_index_);
   swap(commit_index_, other->commit_index_);
+  swap(lsn_, other->lsn_);
 }
 
 ::PROTOBUF_NAMESPACE_ID::Metadata AppendEntryRpc::GetMetadata() const {
@@ -767,15 +802,15 @@ Resp_AppendEntryRPC::Resp_AppendEntryRPC(const Resp_AppendEntryRPC& from)
       _internal_metadata_(nullptr) {
   _internal_metadata_.MergeFrom(from._internal_metadata_);
   ::memcpy(&ok_, &from.ok_,
-    static_cast<size_t>(reinterpret_cast<char*>(&term_) -
-    reinterpret_cast<char*>(&ok_)) + sizeof(term_));
+    static_cast<size_t>(reinterpret_cast<char*>(&lsn_) -
+    reinterpret_cast<char*>(&ok_)) + sizeof(lsn_));
   // @@protoc_insertion_point(copy_constructor:raft_rpc.Resp_AppendEntryRPC)
 }
 
 void Resp_AppendEntryRPC::SharedCtor() {
   ::memset(&ok_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&term_) -
-      reinterpret_cast<char*>(&ok_)) + sizeof(term_));
+      reinterpret_cast<char*>(&lsn_) -
+      reinterpret_cast<char*>(&ok_)) + sizeof(lsn_));
 }
 
 Resp_AppendEntryRPC::~Resp_AppendEntryRPC() {
@@ -802,8 +837,8 @@ void Resp_AppendEntryRPC::Clear() {
   (void) cached_has_bits;
 
   ::memset(&ok_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&term_) -
-      reinterpret_cast<char*>(&ok_)) + sizeof(term_));
+      reinterpret_cast<char*>(&lsn_) -
+      reinterpret_cast<char*>(&ok_)) + sizeof(lsn_));
   _internal_metadata_.Clear();
 }
 
@@ -825,6 +860,13 @@ const char* Resp_AppendEntryRPC::_InternalParse(const char* ptr, ::PROTOBUF_NAME
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 16)) {
           term_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint(&ptr);
+          CHK_(ptr);
+        } else goto handle_unusual;
+        continue;
+      // int32 lsn = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 24)) {
+          lsn_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint(&ptr);
           CHK_(ptr);
         } else goto handle_unusual;
         continue;
@@ -866,6 +908,12 @@ failure:
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(2, this->_internal_term(), target);
   }
 
+  // int32 lsn = 3;
+  if (this->lsn() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(3, this->_internal_lsn(), target);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
         _internal_metadata_.unknown_fields(), target, stream);
@@ -892,6 +940,13 @@ size_t Resp_AppendEntryRPC::ByteSizeLong() const {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32Size(
         this->_internal_term());
+  }
+
+  // int32 lsn = 3;
+  if (this->lsn() != 0) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32Size(
+        this->_internal_lsn());
   }
 
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
@@ -931,6 +986,9 @@ void Resp_AppendEntryRPC::MergeFrom(const Resp_AppendEntryRPC& from) {
   if (from.term() != 0) {
     _internal_set_term(from._internal_term());
   }
+  if (from.lsn() != 0) {
+    _internal_set_lsn(from._internal_lsn());
+  }
 }
 
 void Resp_AppendEntryRPC::CopyFrom(const ::PROTOBUF_NAMESPACE_ID::Message& from) {
@@ -956,6 +1014,7 @@ void Resp_AppendEntryRPC::InternalSwap(Resp_AppendEntryRPC* other) {
   _internal_metadata_.Swap(&other->_internal_metadata_);
   swap(ok_, other->ok_);
   swap(term_, other->term_);
+  swap(lsn_, other->lsn_);
 }
 
 ::PROTOBUF_NAMESPACE_ID::Metadata Resp_AppendEntryRPC::GetMetadata() const {
@@ -981,15 +1040,15 @@ RequestVoteRpc::RequestVoteRpc(const RequestVoteRpc& from)
       _internal_metadata_(nullptr) {
   _internal_metadata_.MergeFrom(from._internal_metadata_);
   ::memcpy(&term_, &from.term_,
-    static_cast<size_t>(reinterpret_cast<char*>(&index_) -
-    reinterpret_cast<char*>(&term_)) + sizeof(index_));
+    static_cast<size_t>(reinterpret_cast<char*>(&lsn_) -
+    reinterpret_cast<char*>(&term_)) + sizeof(lsn_));
   // @@protoc_insertion_point(copy_constructor:raft_rpc.RequestVoteRpc)
 }
 
 void RequestVoteRpc::SharedCtor() {
   ::memset(&term_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&index_) -
-      reinterpret_cast<char*>(&term_)) + sizeof(index_));
+      reinterpret_cast<char*>(&lsn_) -
+      reinterpret_cast<char*>(&term_)) + sizeof(lsn_));
 }
 
 RequestVoteRpc::~RequestVoteRpc() {
@@ -1016,8 +1075,8 @@ void RequestVoteRpc::Clear() {
   (void) cached_has_bits;
 
   ::memset(&term_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&index_) -
-      reinterpret_cast<char*>(&term_)) + sizeof(index_));
+      reinterpret_cast<char*>(&lsn_) -
+      reinterpret_cast<char*>(&term_)) + sizeof(lsn_));
   _internal_metadata_.Clear();
 }
 
@@ -1039,6 +1098,13 @@ const char* RequestVoteRpc::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 16)) {
           index_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint(&ptr);
+          CHK_(ptr);
+        } else goto handle_unusual;
+        continue;
+      // int32 lsn = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 24)) {
+          lsn_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint(&ptr);
           CHK_(ptr);
         } else goto handle_unusual;
         continue;
@@ -1080,6 +1146,12 @@ failure:
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(2, this->_internal_index(), target);
   }
 
+  // int32 lsn = 3;
+  if (this->lsn() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(3, this->_internal_lsn(), target);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
         _internal_metadata_.unknown_fields(), target, stream);
@@ -1108,6 +1180,13 @@ size_t RequestVoteRpc::ByteSizeLong() const {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32Size(
         this->_internal_index());
+  }
+
+  // int32 lsn = 3;
+  if (this->lsn() != 0) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32Size(
+        this->_internal_lsn());
   }
 
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
@@ -1147,6 +1226,9 @@ void RequestVoteRpc::MergeFrom(const RequestVoteRpc& from) {
   if (from.index() != 0) {
     _internal_set_index(from._internal_index());
   }
+  if (from.lsn() != 0) {
+    _internal_set_lsn(from._internal_lsn());
+  }
 }
 
 void RequestVoteRpc::CopyFrom(const ::PROTOBUF_NAMESPACE_ID::Message& from) {
@@ -1172,6 +1254,7 @@ void RequestVoteRpc::InternalSwap(RequestVoteRpc* other) {
   _internal_metadata_.Swap(&other->_internal_metadata_);
   swap(term_, other->term_);
   swap(index_, other->index_);
+  swap(lsn_, other->lsn_);
 }
 
 ::PROTOBUF_NAMESPACE_ID::Metadata RequestVoteRpc::GetMetadata() const {
@@ -1197,15 +1280,15 @@ Resp_RequestVoteRpc::Resp_RequestVoteRpc(const Resp_RequestVoteRpc& from)
       _internal_metadata_(nullptr) {
   _internal_metadata_.MergeFrom(from._internal_metadata_);
   ::memcpy(&ok_, &from.ok_,
-    static_cast<size_t>(reinterpret_cast<char*>(&term_) -
-    reinterpret_cast<char*>(&ok_)) + sizeof(term_));
+    static_cast<size_t>(reinterpret_cast<char*>(&lsn_) -
+    reinterpret_cast<char*>(&ok_)) + sizeof(lsn_));
   // @@protoc_insertion_point(copy_constructor:raft_rpc.Resp_RequestVoteRpc)
 }
 
 void Resp_RequestVoteRpc::SharedCtor() {
   ::memset(&ok_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&term_) -
-      reinterpret_cast<char*>(&ok_)) + sizeof(term_));
+      reinterpret_cast<char*>(&lsn_) -
+      reinterpret_cast<char*>(&ok_)) + sizeof(lsn_));
 }
 
 Resp_RequestVoteRpc::~Resp_RequestVoteRpc() {
@@ -1232,8 +1315,8 @@ void Resp_RequestVoteRpc::Clear() {
   (void) cached_has_bits;
 
   ::memset(&ok_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&term_) -
-      reinterpret_cast<char*>(&ok_)) + sizeof(term_));
+      reinterpret_cast<char*>(&lsn_) -
+      reinterpret_cast<char*>(&ok_)) + sizeof(lsn_));
   _internal_metadata_.Clear();
 }
 
@@ -1255,6 +1338,13 @@ const char* Resp_RequestVoteRpc::_InternalParse(const char* ptr, ::PROTOBUF_NAME
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 16)) {
           term_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint(&ptr);
+          CHK_(ptr);
+        } else goto handle_unusual;
+        continue;
+      // int32 lsn = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 24)) {
+          lsn_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint(&ptr);
           CHK_(ptr);
         } else goto handle_unusual;
         continue;
@@ -1296,6 +1386,12 @@ failure:
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(2, this->_internal_term(), target);
   }
 
+  // int32 lsn = 3;
+  if (this->lsn() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(3, this->_internal_lsn(), target);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
         _internal_metadata_.unknown_fields(), target, stream);
@@ -1322,6 +1418,13 @@ size_t Resp_RequestVoteRpc::ByteSizeLong() const {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32Size(
         this->_internal_term());
+  }
+
+  // int32 lsn = 3;
+  if (this->lsn() != 0) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32Size(
+        this->_internal_lsn());
   }
 
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
@@ -1361,6 +1464,9 @@ void Resp_RequestVoteRpc::MergeFrom(const Resp_RequestVoteRpc& from) {
   if (from.term() != 0) {
     _internal_set_term(from._internal_term());
   }
+  if (from.lsn() != 0) {
+    _internal_set_lsn(from._internal_lsn());
+  }
 }
 
 void Resp_RequestVoteRpc::CopyFrom(const ::PROTOBUF_NAMESPACE_ID::Message& from) {
@@ -1386,6 +1492,7 @@ void Resp_RequestVoteRpc::InternalSwap(Resp_RequestVoteRpc* other) {
   _internal_metadata_.Swap(&other->_internal_metadata_);
   swap(ok_, other->ok_);
   swap(term_, other->term_);
+  swap(lsn_, other->lsn_);
 }
 
 ::PROTOBUF_NAMESPACE_ID::Metadata Resp_RequestVoteRpc::GetMetadata() const {

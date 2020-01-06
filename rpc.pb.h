@@ -190,6 +190,7 @@ class rpc_Entry :
   enum : int {
     kMsgFieldNumber = 2,
     kTermFieldNumber = 1,
+    kLsnFieldNumber = 3,
   };
   // string msg = 2;
   void clear_msg();
@@ -216,6 +217,15 @@ class rpc_Entry :
   void _internal_set_term(::PROTOBUF_NAMESPACE_ID::int32 value);
   public:
 
+  // int32 lsn = 3;
+  void clear_lsn();
+  ::PROTOBUF_NAMESPACE_ID::int32 lsn() const;
+  void set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value);
+  private:
+  ::PROTOBUF_NAMESPACE_ID::int32 _internal_lsn() const;
+  void _internal_set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value);
+  public:
+
   // @@protoc_insertion_point(class_scope:raft_rpc.rpc_Entry)
  private:
   class _Internal;
@@ -223,6 +233,7 @@ class rpc_Entry :
   ::PROTOBUF_NAMESPACE_ID::internal::InternalMetadataWithArena _internal_metadata_;
   ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr msg_;
   ::PROTOBUF_NAMESPACE_ID::int32 term_;
+  ::PROTOBUF_NAMESPACE_ID::int32 lsn_;
   mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   friend struct ::TableStruct_rpc_2eproto;
 };
@@ -338,8 +349,8 @@ class AppendEntryRpc :
     kTermFieldNumber = 1,
     kIndexFieldNumber = 2,
     kPrelogTermFieldNumber = 3,
-    kPrelogIndexFieldNumber = 4,
     kCommitIndexFieldNumber = 5,
+    kLsnFieldNumber = 7,
   };
   // repeated .raft_rpc.rpc_Entry entry = 6;
   int entry_size() const;
@@ -386,15 +397,6 @@ class AppendEntryRpc :
   void _internal_set_prelog_term(::PROTOBUF_NAMESPACE_ID::int32 value);
   public:
 
-  // int32 prelog_index = 4;
-  void clear_prelog_index();
-  ::PROTOBUF_NAMESPACE_ID::int32 prelog_index() const;
-  void set_prelog_index(::PROTOBUF_NAMESPACE_ID::int32 value);
-  private:
-  ::PROTOBUF_NAMESPACE_ID::int32 _internal_prelog_index() const;
-  void _internal_set_prelog_index(::PROTOBUF_NAMESPACE_ID::int32 value);
-  public:
-
   // int32 commit_index = 5;
   void clear_commit_index();
   ::PROTOBUF_NAMESPACE_ID::int32 commit_index() const;
@@ -402,6 +404,15 @@ class AppendEntryRpc :
   private:
   ::PROTOBUF_NAMESPACE_ID::int32 _internal_commit_index() const;
   void _internal_set_commit_index(::PROTOBUF_NAMESPACE_ID::int32 value);
+  public:
+
+  // int32 lsn = 7;
+  void clear_lsn();
+  ::PROTOBUF_NAMESPACE_ID::int32 lsn() const;
+  void set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value);
+  private:
+  ::PROTOBUF_NAMESPACE_ID::int32 _internal_lsn() const;
+  void _internal_set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value);
   public:
 
   // @@protoc_insertion_point(class_scope:raft_rpc.AppendEntryRpc)
@@ -413,8 +424,8 @@ class AppendEntryRpc :
   ::PROTOBUF_NAMESPACE_ID::int32 term_;
   ::PROTOBUF_NAMESPACE_ID::int32 index_;
   ::PROTOBUF_NAMESPACE_ID::int32 prelog_term_;
-  ::PROTOBUF_NAMESPACE_ID::int32 prelog_index_;
   ::PROTOBUF_NAMESPACE_ID::int32 commit_index_;
+  ::PROTOBUF_NAMESPACE_ID::int32 lsn_;
   mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   friend struct ::TableStruct_rpc_2eproto;
 };
@@ -528,6 +539,7 @@ class Resp_AppendEntryRPC :
   enum : int {
     kOkFieldNumber = 1,
     kTermFieldNumber = 2,
+    kLsnFieldNumber = 3,
   };
   // bool ok = 1;
   void clear_ok();
@@ -547,6 +559,15 @@ class Resp_AppendEntryRPC :
   void _internal_set_term(::PROTOBUF_NAMESPACE_ID::int32 value);
   public:
 
+  // int32 lsn = 3;
+  void clear_lsn();
+  ::PROTOBUF_NAMESPACE_ID::int32 lsn() const;
+  void set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value);
+  private:
+  ::PROTOBUF_NAMESPACE_ID::int32 _internal_lsn() const;
+  void _internal_set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value);
+  public:
+
   // @@protoc_insertion_point(class_scope:raft_rpc.Resp_AppendEntryRPC)
  private:
   class _Internal;
@@ -554,6 +575,7 @@ class Resp_AppendEntryRPC :
   ::PROTOBUF_NAMESPACE_ID::internal::InternalMetadataWithArena _internal_metadata_;
   bool ok_;
   ::PROTOBUF_NAMESPACE_ID::int32 term_;
+  ::PROTOBUF_NAMESPACE_ID::int32 lsn_;
   mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   friend struct ::TableStruct_rpc_2eproto;
 };
@@ -667,6 +689,7 @@ class RequestVoteRpc :
   enum : int {
     kTermFieldNumber = 1,
     kIndexFieldNumber = 2,
+    kLsnFieldNumber = 3,
   };
   // int32 term = 1;
   void clear_term();
@@ -686,6 +709,15 @@ class RequestVoteRpc :
   void _internal_set_index(::PROTOBUF_NAMESPACE_ID::int32 value);
   public:
 
+  // int32 lsn = 3;
+  void clear_lsn();
+  ::PROTOBUF_NAMESPACE_ID::int32 lsn() const;
+  void set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value);
+  private:
+  ::PROTOBUF_NAMESPACE_ID::int32 _internal_lsn() const;
+  void _internal_set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value);
+  public:
+
   // @@protoc_insertion_point(class_scope:raft_rpc.RequestVoteRpc)
  private:
   class _Internal;
@@ -693,6 +725,7 @@ class RequestVoteRpc :
   ::PROTOBUF_NAMESPACE_ID::internal::InternalMetadataWithArena _internal_metadata_;
   ::PROTOBUF_NAMESPACE_ID::int32 term_;
   ::PROTOBUF_NAMESPACE_ID::int32 index_;
+  ::PROTOBUF_NAMESPACE_ID::int32 lsn_;
   mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   friend struct ::TableStruct_rpc_2eproto;
 };
@@ -806,6 +839,7 @@ class Resp_RequestVoteRpc :
   enum : int {
     kOkFieldNumber = 1,
     kTermFieldNumber = 2,
+    kLsnFieldNumber = 3,
   };
   // bool ok = 1;
   void clear_ok();
@@ -825,6 +859,15 @@ class Resp_RequestVoteRpc :
   void _internal_set_term(::PROTOBUF_NAMESPACE_ID::int32 value);
   public:
 
+  // int32 lsn = 3;
+  void clear_lsn();
+  ::PROTOBUF_NAMESPACE_ID::int32 lsn() const;
+  void set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value);
+  private:
+  ::PROTOBUF_NAMESPACE_ID::int32 _internal_lsn() const;
+  void _internal_set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value);
+  public:
+
   // @@protoc_insertion_point(class_scope:raft_rpc.Resp_RequestVoteRpc)
  private:
   class _Internal;
@@ -832,6 +875,7 @@ class Resp_RequestVoteRpc :
   ::PROTOBUF_NAMESPACE_ID::internal::InternalMetadataWithArena _internal_metadata_;
   bool ok_;
   ::PROTOBUF_NAMESPACE_ID::int32 term_;
+  ::PROTOBUF_NAMESPACE_ID::int32 lsn_;
   mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   friend struct ::TableStruct_rpc_2eproto;
 };
@@ -926,6 +970,26 @@ inline void rpc_Entry::set_allocated_msg(std::string* msg) {
   // @@protoc_insertion_point(field_set_allocated:raft_rpc.rpc_Entry.msg)
 }
 
+// int32 lsn = 3;
+inline void rpc_Entry::clear_lsn() {
+  lsn_ = 0;
+}
+inline ::PROTOBUF_NAMESPACE_ID::int32 rpc_Entry::_internal_lsn() const {
+  return lsn_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::int32 rpc_Entry::lsn() const {
+  // @@protoc_insertion_point(field_get:raft_rpc.rpc_Entry.lsn)
+  return _internal_lsn();
+}
+inline void rpc_Entry::_internal_set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value) {
+  
+  lsn_ = value;
+}
+inline void rpc_Entry::set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value) {
+  _internal_set_lsn(value);
+  // @@protoc_insertion_point(field_set:raft_rpc.rpc_Entry.lsn)
+}
+
 // -------------------------------------------------------------------
 
 // AppendEntryRpc
@@ -990,26 +1054,6 @@ inline void AppendEntryRpc::set_prelog_term(::PROTOBUF_NAMESPACE_ID::int32 value
   // @@protoc_insertion_point(field_set:raft_rpc.AppendEntryRpc.prelog_term)
 }
 
-// int32 prelog_index = 4;
-inline void AppendEntryRpc::clear_prelog_index() {
-  prelog_index_ = 0;
-}
-inline ::PROTOBUF_NAMESPACE_ID::int32 AppendEntryRpc::_internal_prelog_index() const {
-  return prelog_index_;
-}
-inline ::PROTOBUF_NAMESPACE_ID::int32 AppendEntryRpc::prelog_index() const {
-  // @@protoc_insertion_point(field_get:raft_rpc.AppendEntryRpc.prelog_index)
-  return _internal_prelog_index();
-}
-inline void AppendEntryRpc::_internal_set_prelog_index(::PROTOBUF_NAMESPACE_ID::int32 value) {
-  
-  prelog_index_ = value;
-}
-inline void AppendEntryRpc::set_prelog_index(::PROTOBUF_NAMESPACE_ID::int32 value) {
-  _internal_set_prelog_index(value);
-  // @@protoc_insertion_point(field_set:raft_rpc.AppendEntryRpc.prelog_index)
-}
-
 // int32 commit_index = 5;
 inline void AppendEntryRpc::clear_commit_index() {
   commit_index_ = 0;
@@ -1069,6 +1113,26 @@ AppendEntryRpc::entry() const {
   return entry_;
 }
 
+// int32 lsn = 7;
+inline void AppendEntryRpc::clear_lsn() {
+  lsn_ = 0;
+}
+inline ::PROTOBUF_NAMESPACE_ID::int32 AppendEntryRpc::_internal_lsn() const {
+  return lsn_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::int32 AppendEntryRpc::lsn() const {
+  // @@protoc_insertion_point(field_get:raft_rpc.AppendEntryRpc.lsn)
+  return _internal_lsn();
+}
+inline void AppendEntryRpc::_internal_set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value) {
+  
+  lsn_ = value;
+}
+inline void AppendEntryRpc::set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value) {
+  _internal_set_lsn(value);
+  // @@protoc_insertion_point(field_set:raft_rpc.AppendEntryRpc.lsn)
+}
+
 // -------------------------------------------------------------------
 
 // Resp_AppendEntryRPC
@@ -1111,6 +1175,26 @@ inline void Resp_AppendEntryRPC::_internal_set_term(::PROTOBUF_NAMESPACE_ID::int
 inline void Resp_AppendEntryRPC::set_term(::PROTOBUF_NAMESPACE_ID::int32 value) {
   _internal_set_term(value);
   // @@protoc_insertion_point(field_set:raft_rpc.Resp_AppendEntryRPC.term)
+}
+
+// int32 lsn = 3;
+inline void Resp_AppendEntryRPC::clear_lsn() {
+  lsn_ = 0;
+}
+inline ::PROTOBUF_NAMESPACE_ID::int32 Resp_AppendEntryRPC::_internal_lsn() const {
+  return lsn_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::int32 Resp_AppendEntryRPC::lsn() const {
+  // @@protoc_insertion_point(field_get:raft_rpc.Resp_AppendEntryRPC.lsn)
+  return _internal_lsn();
+}
+inline void Resp_AppendEntryRPC::_internal_set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value) {
+  
+  lsn_ = value;
+}
+inline void Resp_AppendEntryRPC::set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value) {
+  _internal_set_lsn(value);
+  // @@protoc_insertion_point(field_set:raft_rpc.Resp_AppendEntryRPC.lsn)
 }
 
 // -------------------------------------------------------------------
@@ -1157,6 +1241,26 @@ inline void RequestVoteRpc::set_index(::PROTOBUF_NAMESPACE_ID::int32 value) {
   // @@protoc_insertion_point(field_set:raft_rpc.RequestVoteRpc.index)
 }
 
+// int32 lsn = 3;
+inline void RequestVoteRpc::clear_lsn() {
+  lsn_ = 0;
+}
+inline ::PROTOBUF_NAMESPACE_ID::int32 RequestVoteRpc::_internal_lsn() const {
+  return lsn_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::int32 RequestVoteRpc::lsn() const {
+  // @@protoc_insertion_point(field_get:raft_rpc.RequestVoteRpc.lsn)
+  return _internal_lsn();
+}
+inline void RequestVoteRpc::_internal_set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value) {
+  
+  lsn_ = value;
+}
+inline void RequestVoteRpc::set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value) {
+  _internal_set_lsn(value);
+  // @@protoc_insertion_point(field_set:raft_rpc.RequestVoteRpc.lsn)
+}
+
 // -------------------------------------------------------------------
 
 // Resp_RequestVoteRpc
@@ -1199,6 +1303,26 @@ inline void Resp_RequestVoteRpc::_internal_set_term(::PROTOBUF_NAMESPACE_ID::int
 inline void Resp_RequestVoteRpc::set_term(::PROTOBUF_NAMESPACE_ID::int32 value) {
   _internal_set_term(value);
   // @@protoc_insertion_point(field_set:raft_rpc.Resp_RequestVoteRpc.term)
+}
+
+// int32 lsn = 3;
+inline void Resp_RequestVoteRpc::clear_lsn() {
+  lsn_ = 0;
+}
+inline ::PROTOBUF_NAMESPACE_ID::int32 Resp_RequestVoteRpc::_internal_lsn() const {
+  return lsn_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::int32 Resp_RequestVoteRpc::lsn() const {
+  // @@protoc_insertion_point(field_get:raft_rpc.Resp_RequestVoteRpc.lsn)
+  return _internal_lsn();
+}
+inline void Resp_RequestVoteRpc::_internal_set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value) {
+  
+  lsn_ = value;
+}
+inline void Resp_RequestVoteRpc::set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value) {
+  _internal_set_lsn(value);
+  // @@protoc_insertion_point(field_set:raft_rpc.Resp_RequestVoteRpc.lsn)
 }
 
 #ifdef __GNUC__

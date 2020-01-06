@@ -11,7 +11,7 @@ string __get_ip_from_socket__(tcp::socket &peer) {
 RPC::RPC(boost::asio::io_context &io, std::function<void(RPC_TYPE, string, string, int)> cb) : _acceptor(io), io(io), cb(cb) {
 }
 
-void RPC::writeTo(string ip, int port, string rpc_msg, std::function<void (boost::system::error_code &ec, std::size_t)> cb) {
+void RPC::writeTo(string ip, int port, string rpc_msg, std::function<void(boost::system::error_code &ec, std::size_t)> cb) {
     try {
         //如果网络不可达到，tcp建立链接不能成功
         getConnection(ip, port, cb);
@@ -37,7 +37,7 @@ void RPC::accept_callback(const boost::system::error_code &error, tcp::socket pe
 }
 
 void RPC::read_header(tcp::socket peer) {
-    boost::asio::async_read(peer, boost::asio::buffer(meta_char, 8), std::bind(&RPC::read_body, this, std::move(peer), std::placeholders::_1, std::placeholders::_2));
+    boost::asio::async_read(peer, boost::asio::buffer(meta_char, 4), std::bind(&RPC::read_body, this, std::move(peer), std::placeholders::_1, std::placeholders::_2));
 }
 
 void RPC::read_body(tcp::socket peer, const boost::system::error_code &error, size_t bytes_transferred) {
@@ -49,11 +49,23 @@ void RPC::read_body(tcp::socket peer, const boost::system::error_code &error, si
         // 取消 能tm的取消么
     } else {
         char char_msg_len[5] = "";
-        char char_rpc_type[5] = "";
         memcpy(char_msg_len, meta_char, 4);
         int msg_len = atoi(char_msg_len);
-        memcpy(char_rpc_type, meta_char + 4, 4);
+        //这里有个问题，我已经把socket move给了body_callback，还怎么再move 给read_head？所以我应该拿出信息，传给body_callback？
+        boost::asio::async_read(peer, boost::asio::buffer(big_char, msg_len), std::bind(&RPC::body_callback, this, std::move(peer), std::placeholders::_1, std::placeholders::_2));
+        read_header(std::move(peer));
+    }
+}
+
+void RPC::body_callback(tcp::socket peer, const boost::system::error_code &error, size_t bytes_transferred) {
+    if (error) {
+        BOOST_LOG_TRIVIAL(error) << error;
+//        peer.cancel() or close()?
+    } else {
+        char char_rpc_type[5] = "";
+        memcpy(char_rpc_type, big_char, 4);
         int remote_rpc_type = atoi(char_rpc_type);
+        //todo 能否更合理的转换
         if (remote_rpc_type == 1) {
             rpc_type = REQUEST_VOTE;
         } else if (remote_rpc_type == 2) {
@@ -65,22 +77,11 @@ void RPC::read_body(tcp::socket peer, const boost::system::error_code &error, si
         } else {
             rpc_type = ERROR;
         }
-        boost::asio::async_read(peer, boost::asio::buffer(big_char, max_body_length), std::bind(&RPC::body_callback, this, std::move(peer), std::placeholders::_1, std::placeholders::_2);
-    }
-}
-
-void RPC::body_callback(tcp::socket peer, const boost::system::error_code &error, size_t bytes_transferred) {
-    if (error) {
-        BOOST_LOG_TRIVIAL(error) << error;
-//        peer.cancel() or close()?
-    } else {
-        string msg(big_char, bytes_transferred);
+        string msg(big_char + 4, bytes_transferred - 4); //纯的msg，不包括rpc type，比如已知rpc_type为Resp_AppendEntryRPC，那么msg的内容为{ ok=true, term =10}
         cb(rpc_type, msg);
-        //一定要运行这句，如果cb抛出异常就不行了
-        read_header(std::move(peer));
     }
-
 }
+
 //void RPC::getConnection(string ip, int port, std::functio) {
 //    如果是从pool中
 //}
