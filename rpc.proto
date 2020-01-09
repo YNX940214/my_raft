@@ -5,12 +5,13 @@ message rpc_Entry {
     int32 term = 1;
     string msg = 2;
     int32 lsn = 3; //all rpc and resp should embed lsn, to keep idempotence
+    int32 index=4;  // we can't put index in ae rpc, because: if we want to send an empty HB, we only need the term in ae
+
 
 }
 
 message AppendEntryRpc {
     int32 term = 1;
-    int32 index = 2;
     int32 prelog_term = 3;
     int32 commit_index = 5;
     repeated rpc_Entry entry = 6;

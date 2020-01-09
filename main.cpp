@@ -35,13 +35,13 @@ public:
             state_(follower),
             F_already_voted(false),
             timer_candidate_expire_(loop),
-            C_grantedVoteNum(0),
+            winned_votes_(0),
             state_machine_(),
             network_(loop, std::bind(&instance::reactToIncomingMsg, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4)) {
         load_config_from_file();
 
         for (auto server_tuple: configuration_) {
-            nextIndex_[server_tuple] = 0;
+            nextIndex_[server_tuple] = -1; // -1 not 0, because at the beginning, entries[0] raise Exception,
             Follower_saved_index[server_tuple] = 0;
             current_rpc_lsn_[server_tuple] = 0;
         }
@@ -119,7 +119,7 @@ public:
     void trans2candidate() {
         term_++;
         state_ = candidate;
-        C_grantedVoteNum = 1;
+        winned_votes_ = 1;
         //设置下一个term candidate的定时器
         int waiting_count = timer_candidate_expire_.expires_from_now(boost::posix_time::seconds(random_candidate_expire()));
         if (waiting_count == 0) {
@@ -266,7 +266,7 @@ public:
     bool F_already_voted;
 
 //   candidate 特有的
-    int C_grantedVoteNum;
+    int winned_votes_;
 
     //primary 特有的
     map<tuple<string, int>, int> nextIndex_;
@@ -290,55 +290,50 @@ public:
 
 private:
 
-    string build_rpc_string(string type, std::tuple<string, int> server) {
-        //这里的string包括（length, type, msg)，与读取的时候是不一样的
-        unsigned int server_current_rpc_lsn = current_rpc_lsn_[server];
-        if (type == "ae") {
-
-        } else if (type == "rc") {
-            RequestVoteRpc rpc;
-            rpc.set_lsn(server_current_rpc_lsn);
-            rpc.set_term(term_);
-            rpc.set_index(entries_.size() - 1);
-            string msg;
-            rpc.SerializeToString(&msg);
-            int len = 4 + msg.size();
-            //这里有个bug我们先不处理，在msg特别长的时候会出现
-            return to_string(len) + to_string(1) + msg;
-        }
-
-    }
 
     void trans2P() {
+        //todo cancel all timers(maybe, need a deeper think)
         state_ = primary;
         for (auto server: configuration_) {
             AE(server);
         }
     }
 
+    string build_rpc_ae_string(tuple<string, int> server) {
+        unsigned int server_current_rpc_lsn = current_rpc_lsn_[server];
+        AppendEntryRpc rpc;
+        rpc.set_lsn(server_current_rpc_lsn);
+        rpc.set_term(term_);
+        int index_to_send = nextIndex_[server];
+        rpc.set_commit_index(entries_.get_commit_index());
+        if (index_to_send > 0) {
+            rpc_Entry prev_entry = entries_.get(index_to_send - 1);
+            rpc.set_prelog_term(prev_entry.get_term());
+        } else if (index_to_send <= 0) {
+            rpc.set_prelog_term(-1);
+        }
+
+        if (index_to_send == entries_.size()) {
+            //empty rpc as HB
+        } else {
+            rpc_Entry entry = entries_.get(index_to_send);  //如何做Entry到protobuf的映射？
+            rpc.set_rpc_Entry(entry);  //有空看下protobuf是怎么用 这个nested的变量的
+        }
+        string msg;
+        rpc.SerializeToString(&msg);
+        int len = 4 + msg.size();
+        return to_string(len) + to_string(1) + msg;
+    }
 
     void AE(tuple<string, int> server) { //todo 设定重传timer！
-        string ip = get<0>(server);
-        int port = get<1>(server);
-        AppendEntryRpc rpc;
-        rpc.set_term(term_);
-        int index = nextIndex_[server];
-        rpc.set_index(index);
-        //todo if index = entries.size(), then just send empty ae, if index == 0,
-        Entry entry = entries_.get(index);  //如何做Entry到protobuf的映射？
-        Entry prev_entry = entries_.get(index - 1);
-        rpc.set_prelog_term(prev_entry.get_term());
-        rpc.set_commit_index(entries_.get_commit_index());
-        rpc.set_Entry(entry);  //有空看下protobuf是怎么用 这个nested的变量的
-        string ae_rpc_str = build_rpc_string("ae", server);
+        string ae_rpc_str = build_rpc_ae_string(server);
         writeTo(server, ae_rpc_str);   //考虑如下场景，发了AE1,index为100,然后定时器到期重发了AE2,index为100，这时候收到ae1的resp为false，将index--,如果ae2到F，又触发了一次resp，这两个rpc的请求一样，resp一样，但是P收到两个一样的resp会将index--两次
         deadline_timer &t1 = retry_timers_[server];
-
-        int waiting_counts = t1.expires_from_now(boost::posix_time::seconds(random_candidate_expire()));
+        int waiting_counts = t1.expires_from_now(boost::posix_time::seconds(random_ae_retry_expire()));
         if (waiting_counts != 0) {
             throw "should be zero, a timer can't be interrupt by network, but when AE is called, there should be no hooks on the timer";
         } else {
-            timer_candidate_expire_.async_wait([this, server](const boost::system::error_code &error) {
+            t1.async_wait([this, server](const boost::system::error_code &error) {
                 if (error == boost::asio::error::operation_aborted) {
                     //do nothing, maybe log
                 } else {
@@ -352,6 +347,7 @@ private:
         }
     }
 
+    // this is term_ == remote term, otherwise we deal somewhere else(actually just deny or trans2F)
     void primary_deal_resp_ae(tuple<string, int> server, Resp_AppendEntryRPC &resp_ae) {
         int resp_lsn = resp_ae.lsn();
         int current_rpc_lsn = current_rpc_lsn_[server];
@@ -361,13 +357,14 @@ private:
             bool ok = resp_ae.ok();
             if (ok) {
                 int last_send_index = nextIndex_[server];
-                if (last_send_index == entries_.size()) {
+                if (last_send_index > entries_.size()) {
 //                    don't nextIndex_[server] = last_send_index + 1;
                 } else {
                     nextIndex_[server] = last_send_index + 1;
                 }
-
-                if (last_send_index + 1 == entries_.size()) {
+                // whether send next entry immediately is determined by primary_deal_resp_ae, but whether to build an empty ae is determinde by AE()
+                if (last_send_index >= entries_.size()) {
+                    // notice > and ==, we don't send next index immediately
                     //do nothing, let the timers expires and send empty rps_ae as heartbeat, that situation 2 in AE()
                 } else {
                     //cancel timer todo check hook num
@@ -378,20 +375,16 @@ private:
             } else {
                 /* ok == false, but there may be many possibilities, like remote server encouter disk error, what should it do(one way is just crash, no response, so primary will not push back the index to send)
                  * so we must ensure !!!!!!!!!!!!! the remote return resp_ae( ok =false ) only in one situation, that prev_index != rpc_index -1, any other (disk failure, divide 0) will nerver return false! just crash it.
-                 * */
-
-                //corner cases
+                 */
                 int last_send_index = nextIndex_[server];
-                if (last_send_index == 0) {
+                if (last_send_index <= 0) {
                     // don't nextIndex_[server] = last_send_index - 1;
                 } else {
                     nextIndex_[server] = last_send_index - 1;
                 }
-                if (last_send_index == 0) {
-                    //todo the logic is important, review it, because it was night, nearly sleep
+                if (last_send_index <= 0) {
                     // do nothing, let the timers expires
                 } else {
-                    //todo check hook num
                     retry_timers_[server].cancel();
                     AE(server);
                 }
@@ -400,14 +393,67 @@ private:
         }
     }
 
+
     void request_votes() {
-        for (int i = 0; i < configuration_.size(); i++) {
-            std::tuple<string, int> &server = configuration_[i];
-            string request_vote_rpc = build_rpc_string("rc", server);
-            writeTo(server, request_vote_rpc);
+        for (auto &server : configuration_) {
+            RV(server);
         }
     }
 
+    string build_rpc_rv_string(tuple<string, int> server) {
+        unsigned int server_current_rpc_lsn = current_rpc_lsn_[server];
+        RequestVoteRpc rpc;
+        rpc.set_lsn(server_current_rpc_lsn);
+        rpc.set_term(term_);
+        rpc.set_index(entries_.size() - 1);
+        string msg;
+        rpc.SerializeToString(&msg);
+        int len = 4 + msg.size();
+        //这里有个bug我们先不处理，在msg特别长的时候会出现
+        return to_string(len) + to_string(1) + msg;
+    }
+
+    void RV(tuple<string, int> server) {
+        string rv_rpc_str = build_rpc_rv_string(server);
+        writeTo(server, rv_rpc_str);
+        deadline_timer &timer = retry_timers_[server];
+        int waiting_counts = timer.expires_from_now(boost::posix_time::seconds(random_rv_retry_expire()));
+        if (waiting_counts != 0) {
+            throw "should be zero, a timer can't be interrupt by network, but when AE is called, there should be no hooks on the timer";
+        } else {
+            timer.async_wait([this, server](const boost::system::error_code &error) {
+                if (error == boost::asio::error::operation_aborted) {
+                    //do nothing, maybe log
+                } else {
+                    RV(server);
+                }
+            });
+        }
+    }
+
+    void candidate_deal_resp_rv(tuple<string, int> server, Resp_RequestVoteRpc &resp_rv) {
+        int resp_lsn = resp_rv.lsn();
+        int current_rpc_lsn = current_rpc_lsn_[server];
+        if (current_rpc_lsn != resp_lsn) {
+            return;
+        } else {
+            bool ok = resp_rv.ok();
+            if (ok) {
+                winned_votes_++;
+                if (winned_vote2>){
+
+                }else{
+                    // cancel the timer
+                }
+
+            } else {
+
+            }
+        }
+    }
+
+
+private:
     //mock 一下先
     void load_config_from_file() {
         configuration_ = {

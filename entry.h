@@ -7,6 +7,8 @@
 
 #include <string>
 #include <vector>
+#include "rpc/rpc.h"
+#include "rpc.pb.h"
 
 using std::vector;
 using std::string;
@@ -22,7 +24,7 @@ private:
 
 class Entries {
 public:
-    Entry get(int index);
+    rpc_Entry get(int index);
 
     unsigned get_commit_index();
 
