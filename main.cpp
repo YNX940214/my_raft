@@ -33,13 +33,12 @@ public:
             ioContext(loop),
             term_(0),
             state_(follower),
-            F_already_voted(false),
-            timer_candidate_expire_(loop),
-            winned_votes_(0),
+            already_voted_(false),
+            candidate_timer_(loop),
+            network_(loop, std::bind(&instance::reactToIncomingMsg, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3)),
             state_machine_(),
-            network_(loop, std::bind(&instance::reactToIncomingMsg, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4)) {
+            winned_votes_(0) {
         load_config_from_file();
-
         for (auto server_tuple: configuration_) {
             nextIndex_[server_tuple] = -1; // -1 not 0, because at the beginning, entries[0] raise Exception,
             Follower_saved_index[server_tuple] = 0;
@@ -47,249 +46,51 @@ public:
         }
     }
 
+    //mock 一下先
+    void load_config_from_file() {
+        configuration_ = {
+                {"locahost", 8888},
+                {"locahost", 7777},
+                {"locahost", 9999},
+        };
+        needed_votes_ = 2;
+    }
+
     void run() {
         network_.startAccept();
-        int waiting_counts = timer_candidate_expire_.expires_from_now(boost::posix_time::seconds(random_candidate_expire()));
+        int waiting_counts = candidate_timer_.expires_from_now(boost::posix_time::seconds(random_candidate_expire()));
         if (waiting_counts == 0) {
             throw "初始化阶段这里不可能为0";
         } else {
-            timer_candidate_expire_.async_wait([this](const boost::system::error_code &error) {
+            candidate_timer_.async_wait([this](const boost::system::error_code &error) {
                 if (error == boost::asio::error::operation_aborted) {
                     //可能会被在follow_deal_VoteRPC中取消，或者ARPC中取消，但是按照目前看来被cancel什么都不用管，把执行流让给主动cancel定时器的函数就行了
                 } else {
-                    trans2candidate();
+                    trans2C();
                 }
             });
         }
         ioContext.run();
     }
 
-    void writeTo(tuple<string, int> server, string msg) {
-        network_.writeTo(server, msg, std::bind);
-    }
-
-    void reactToIncomingMsg(RPC_TYPE rpc_type_, string msg, tuple<string, int> server) {
-        //proto buf decode
-        if (rpc_type_ == REQUEST_VOTE) {
-            RequestVoteRpc voteRpc;
-            voteRpc.ParseFromString(msg);
-            react2_VoteRPC(server, voteRpc);
-        } else if (rpc_type_ == APPEND_ENTRY) {
-            AppendEntryRpc append_rpc;
-            append_rpc.ParseFromString(msg);
-            react2_AE(server, append_rpc);
-        } else if (rpc_type_ == RESP_VOTE) {
-            if (state_ == follower) {
-
-            } else if (state_ == candidate) {
-
-            } else {
-
-            }
-        } else if (rpc_type_ == RESP_APPEND) {
-            if (state_ == follower) {
-                //do nothing
-            } else if (state_ == candidate) {
-                //do nothing
-            } else {
-                primary_react2_resp_append_entry();
-            }
-        } else {
-            BOOST_LOG_TRIVIAL(error) << "unknown action: " << rpc_type_ << ", the whole msg string is:\n" + msg;
-        }
-    }
-
-    void trans2follower(int term) {
+private:
+    void trans2F(int term) {
         //todo clean election state（从candidate trans过来）
+        //todo cancel all the timers
         term_ = term;
         state_ = follower;
-        int waiting_count = timer_candidate_expire_.expires_from_now(boost::posix_time::seconds(random_candidate_expire()));
+        int waiting_count = candidate_timer_.expires_from_now(boost::posix_time::seconds(random_candidate_expire()));
         if (waiting_count == 0) {
-            throw "trans2follower是因为收到了外界rpc切换成follower，所以至少有一个cb_tran2_candidate的定时器，否则就是未考虑的情况";
+            throw "trans2F是因为收到了外界rpc切换成follower，所以至少有一个cb_tran2_candidate的定时器，否则就是未考虑的情况";
         }
-        timer_candidate_expire_.async_wait([this](const boost::system::error_code &error) {
+        candidate_timer_.async_wait([this](const boost::system::error_code &error) {
             if (error == boost::asio::error::operation_aborted) {
                 //啥都不做，让react处理
             } else {
-                trans2candidate();
+                trans2C();
             }
         });
     }
-
-    void trans2candidate() {
-        term_++;
-        state_ = candidate;
-        winned_votes_ = 1;
-        //设置下一个term candidate的定时器
-        int waiting_count = timer_candidate_expire_.expires_from_now(boost::posix_time::seconds(random_candidate_expire()));
-        if (waiting_count == 0) {
-            //完全可能出现这种情况，如果是cb_trans2_candidate的定时器自然到期，waiting_count就是0
-            //leave behind
-        } else {
-            throw ("trans2candidate只能是timer_candidate_expire自然到期触发，所以不可能有waiting_count不为0的情况，否则就是未考虑的情况");
-        }
-        request_votes();
-    }
-
-    void resp_2_vote(bool vote, string context_log, tuple<string, int> server) {
-        Resp_RequestVoteRpc resp_vote;
-        resp_vote.set_ok(vote);
-        resp_vote.set_term(term_);
-        string msg;
-        resp_vote.SerializeToString(&msg);
-        network_.writeTo(server, msg, [context_log](boost::system::error_code &ec, std::size_t) {
-            if (!ec) {
-                BOOST_LOG_TRIVIAL(debug) << "callback of '" << context_log << "' done";
-            } else {
-                BOOST_LOG_TRIVIAL(info) << "callback of '" << context_log << "' got an  error: " << ec;
-            }
-        });
-    }
-
-    //term 没用
-    void resp2entry(bool ok, string context_log, tuple<string, int> server) {
-        Resp_AppendEntryRPC resp_entry;
-        resp_entry.set_ok(ok);
-        resp_entry.set_term(term_);
-        string msg;
-        resp_entry.SerializeToString(&msg);
-        network_.writeTo(server, msg, [context_log](boost::system::error_code &ec, std::size_t) {
-            if (!ec) {
-                BOOST_LOG_TRIVIAL(debug) << "callback of '" << context_log << "' done";
-            } else {
-                BOOST_LOG_TRIVIAL(info) << "callback of '" << context_log << "' got an  error: " << ec;
-            }
-        });
-    }
-
-
-    //有张表对比三种情况，对于term>remote,和<remote的情况，三个state是相同的，只有=remote的情况才是不同的，所以这里根据term封装
-    void react2_VoteRPC(tuple<string, int> server, RequestVoteRpc vote_rpc) {
-        int term = vote_rpc.term();
-        int vote_index = vote_rpc.index();
-        if (term_ > term) {
-            resp_2_vote(false, "react2_VoteRPC: term_ > remote,  write back false", server);
-            return;
-        } else if (term_ < term) {
-            trans2follower(term);
-            resp_2_vote(true, "react2_VoteRPC: term_ < remote,  write back true", server);
-            return;
-        } else {
-            if (state_ == follower || state_ == primary) {
-                resp_2_vote(false, "react2_VoteRPC: term_ = remote,  write back false", server);
-            } else {
-                if (!F_already_voted) {  //这个if针对 term_ == term 的情况，只有一票
-                    bool should_vote = false;
-                    if (entries_.size() == 0) { //只管投票
-                        should_vote = true;
-                    } else {
-                        Entry &lastEntry = entries_.last_entry();
-                        if (lastEntry.Term() > term) {
-                            should_vote = false;
-                        } else if (lastEntry.Term() < term) {
-                            should_vote = true;
-                        } else {
-                            if (lastEntry.Index() > vote_index) {
-                                should_vote = false;
-                            } else {
-                                should_vote = true;
-                            }
-                        }
-                    }
-                    if (should_vote) {
-                        resp_2_vote(false, "react2_VoteRPC: A vote is send", server);
-                    } else {
-                        resp_2_vote(false, "react2_VoteRPC: A_vote is denied", server);
-                    }
-                } else {
-                    resp_2_vote(false, "react2_VoteRPC: No votes left this term", server);
-                }
-            }
-            return;
-        }
-    }
-
-
-    void react2_resp_ae(tuple<string, int> server, Resp_AppendEntryRPC &resp_ae) {
-        int term = resp_ae.term();
-        if (term_ < term) {
-            if (state_ == candidate || state_ == primary) {
-                for (auto &timers : retry_timers_) {
-                    timers.second.cancel();
-                }
-            }
-            trans2follower(term);
-        } else if (term_ > term) {
-            //do nothing, even with the correct rpc_lsn, the primary can't do anything for safety, not even response
-        } else {
-            if (state_ == primary) {
-
-            }
-        }
-    }
-
-    void react2_AE(tuple<string, int> server, AppendEntryRpc append_rpc) {
-        int term = append_rpc.term();
-
-        raft_rpc::rpc_Entry entry = append_rpc.entry(); //这里有点蛋疼，protobuf很难用，先放着，假设抽象好了
-        int prelog_term = append_rpc.prelog_term();
-        int prelog_index = append_rpc.prelog_index();
-        int commitIndex = append_rpc.commit_index();
-        // 这行错了!       assert(commitIndex <= prelog_index); 完全有可能出现commitIndex比prelog_index大的情况
-        if (term_ > term) {
-            resp2entry(false, "react2_AE, term_ > term", server);
-            return;
-        } else { //term_ <= term
-            trans2follower(term);//会设置定时器，所以此函数不需要设置定时器了
-            //一开始想法是commitIndex直接赋值给本地commitIndex，然后本地有一个线程直接根据本第commitIndex闷头apply to stateMachine就行了（因为两者完全正交），
-            // 但是一想不对，因为rpc的commitIndex可能比prelog_index大，假设本地和主同步的entry是0到20，21到100都是stale的entry，rpc传来一个commitIndex为50，prelog_index为80（还没走到真确的20），难道那
-            // 个线程就无脑把到80的entry给apply了？所以本地的commitIndex只能是
-            unsigned last_index = entries_.last_index();
-            if (last_index < prelog_index) {
-                resp2entry(false, "react2_AE, term is ok, but follower's last entry index is " + to_string(last_index) + ", but prelog_index is " + to_string(prelog_index), server);
-                return;
-            } else { // if (last_index >= prelog_index)  注意> 和 = 的情况是一样的，（至少目前我是这么认为的）
-                if (entries_[prelog_index].Term() <= prelog_term) {
-                    entries_.update_commit_index(commitIndex, prelog_index); //commitIndex永远小于prelog_index，而prelog_index能够复制又表示之前的index都已经ready了，所以可以修改commitIndex了
-                    entries_.insert(prelog_index, entry);
-                    resp2entry(true, "成功insert", server);
-                } else {
-                    throw "出现了完全不可能出现的情况"; //其实是有可能的，比如在网络滞留了很久的rpc的
-                }
-            }
-        }
-    }
-
-
-//    follower 特有的
-    //可以设置为bool，因为raft规定一个term只能一个主, 考虑这种情况，candidate发出了rv，但是所有f只能接受rv，不能发会resp_rv,但是我的设定中f在收到相同term的rv时不会重传，因为c会自动增加term再rv，只有收到了更高term的rv，f才会resp，所以这里只用bool就够了
-    bool F_already_voted;
-
-//   candidate 特有的
-    int winned_votes_;
-
-    //primary 特有的
-    map<tuple<string, int>, int> nextIndex_;
-    map<tuple<string, int>, int> Follower_saved_index;
-
-
-    //follower 和 candidate 才需要的
-    RPC network_;
-    deadline_timer timer_candidate_expire_;
-    int term_;
-    State state_;
-    StateMachine state_machine_;
-    io_context &ioContext;
-    Entries entries_;
-
-    map<std::tuple<string, int>, int> current_rpc_lsn_; //if resp_rpc's lsn != current[server]; then just ignore; (send back the index can't not ensuring idempotence; for example we received a resp which wandereding in the network for 100 years)
-    map<std::tuple<string, int>, deadline_timer> retry_timers_;
-    vector<std::tuple<string, int>> configuration_;
-    string ip_;
-    int port_;
-
-private:
-
 
     void trans2P() {
         //todo cancel all timers(maybe, need a deeper think)
@@ -299,6 +100,25 @@ private:
         }
     }
 
+    void trans2C() {
+        //only F can trans2C, and when transfered to C, the timer must hook nothing, so we don't need to cancel any timer
+        term_++;
+        state_ = candidate;
+        winned_votes_ = 1;
+        //设置下一个term candidate的定时器
+        int waiting_count = candidate_timer_.expires_from_now(boost::posix_time::seconds(random_candidate_expire()));
+        if (waiting_count == 0) {
+            //完全可能出现这种情况，如果是cb_trans2_candidate的定时器自然到期，waiting_count就是0
+            //leave behind
+        } else {
+            throw ("trans2C只能是timer_candidate_expire自然到期触发，所以不可能有waiting_count不为0的情况，否则就是未考虑的情况");
+        }
+        for (auto &server : configuration_) {
+            RV(server);
+        }
+    }
+
+private:
     string build_rpc_ae_string(tuple<string, int> server) {
         unsigned int server_current_rpc_lsn = current_rpc_lsn_[server];
         AppendEntryRpc rpc;
@@ -308,7 +128,7 @@ private:
         rpc.set_commit_index(entries_.get_commit_index());
         if (index_to_send > 0) {
             rpc_Entry prev_entry = entries_.get(index_to_send - 1);
-            rpc.set_prelog_term(prev_entry.get_term());
+            rpc.set_prelog_term(prev_entry.term());
         } else if (index_to_send <= 0) {
             rpc.set_prelog_term(-1);
         }
@@ -347,8 +167,232 @@ private:
         }
     }
 
+    string build_rpc_rv_string(tuple<string, int> server) {
+        unsigned int server_current_rpc_lsn = current_rpc_lsn_[server];
+        RequestVoteRpc rpc;
+        rpc.set_lsn(server_current_rpc_lsn);
+        rpc.set_term(term_);
+        rpc.set_index(entries_.size() - 1);
+        string msg;
+        rpc.SerializeToString(&msg);
+        int len = 4 + msg.size();
+        //这里有个bug我们先不处理，在msg特别长的时候会出现
+        return to_string(len) + to_string(1) + msg;
+    }
+
+    void RV(tuple<string, int> server) {
+        string rv_rpc_str = build_rpc_rv_string(server);
+        writeTo(server, rv_rpc_str);
+        deadline_timer &timer = retry_timers_[server];
+        int waiting_counts = timer.expires_from_now(boost::posix_time::seconds(random_rv_retry_expire()));
+        if (waiting_counts != 0) {
+            throw "should be zero, a timer can't be interrupt by network, but when AE is called, there should be no hooks on the timer";
+        } else {
+            timer.async_wait([this, server](const boost::system::error_code &error) {
+                if (error == boost::asio::error::operation_aborted) {
+                    //do nothing, maybe log
+                } else {
+                    RV(server);
+                }
+            });
+        }
+    }
+
+private:
+    void reactToIncomingMsg(RPC_TYPE rpc_type_, string msg, tuple<string, int> server) {
+        //proto buf decode
+        if (rpc_type_ == REQUEST_VOTE) {
+            RequestVoteRpc rv;
+            rv.ParseFromString(msg);
+            react2rv(server, rv);
+        } else if (rpc_type_ == APPEND_ENTRY) {
+            AppendEntryRpc ae;
+            ae.ParseFromString(msg);
+            react2ae(server, ae);
+        } else if (rpc_type_ == RESP_VOTE) {
+            Resp_RequestVoteRpc resp_rv;
+            resp_rv.ParseFromString(msg);
+            react2resp_rv(server, resp_rv);
+        } else if (rpc_type_ == RESP_APPEND) {
+            Resp_AppendEntryRpc resp_ae;
+            resp_ae.ParseFromString(msg);
+            react2resp_ae(server, resp_ae);
+        } else {
+            BOOST_LOG_TRIVIAL(error) << "unknown action: " << rpc_type_ << ", the whole msg string is:\n" + msg;
+        }
+    }
+
+    void react2ae(tuple<string, int> server, AppendEntryRpc rpc_ae) {
+        int remote_term = rpc_ae.term();
+        raft_rpc::rpc_Entry entry = rpc_ae.entry(); //这里有点蛋疼，protobuf很难用，先放着，假设抽象好了
+        int prelog_term = rpc_ae.prelog_term();
+        int prelog_index = entry.index() - 1;
+        int commit_index = rpc_ae.commit_index();
+        int rpc_lsn = rpc_ae.lsn();
+        // 这行错了!       assert(commitIndex <= prelog_index); 完全有可能出现commitIndex比prelog_index大的情况
+        if (term_ > remote_term) {
+            make_resp_ae(false, "react2ae, term_ > term", server, rpc_lsn);
+            return;
+        } else { //term_ <= remote_term
+            if (state_ == primary && term_ == remote_term) {
+                throw "error, one term has two primaries";
+            }
+            trans2F(remote_term);//会设置定时器，所以此函数不需要设置定时器了
+            /*
+             一开始想法是commitIndex直接赋值给本地commitIndex，然后本地有一个线程直接根据本第commitIndex闷头apply to stateMachine就行了（因为两者完全正交），
+             但是一想不对，因为rpc的commitIndex可能比prelog_index大，假设本地和主同步的entry是0到20，21到100都是stale的entry，rpc传来一个commitIndex为50，prelog_index为80（还没走到真确的20），
+             难道那个线程就无脑把到80的entry给apply了？所以本地的commitIndex只能是
+             */
+            if (prelog_term == -1) { //see AE, we set prelog_term to -1 as this is the index0 log of primary, the follower has to accept it
+
+            } else {
+                unsigned last_index = entries_.size() - 1;
+                if (last_index < prelog_index) {
+                    make_resp_ae(false, "react2ae, term is ok, but follower's last entry index is " + to_string(last_index) + ", but prelog_index is " + to_string(prelog_index), server);
+                    return;
+                } else { // if (last_index >= prelog_index)  注意> 和 = 的情况是一样的，（至少目前我是这么认为的）
+                    int term_of_local_entry_with_prelog_index = entries_[prelog_index].term();
+                    if (term_of_local_entry_with_prelog_index == prelog_term) {
+                        entries_.insert(prelog_index + 1, entry);
+                        // we choose the smaller one to be the commit index, the logic is in entries_.update_commit_index function
+                        entries_.update_commit_index(commit_index, prelog_index);
+                        make_resp_ae(true, "成功insert", server, rpc_lsn);
+                        return;
+                    } else if (term_of_local_entry_with_prelog_index < prelog_term) {
+                        // easy to make an example
+                        make_resp_ae(false, "react2ae, term is ok, but follower's entry's term" + to_string(term_of_local_entry_with_prelog_index) + "of prelog_index " + to_string(prelog_index) + "is SMALLER than rpc's prelog_term" + to_string(prelog_term), server, rpc_lsn);
+                        return;
+                    } else {
+                        make_resp_ae(false, "react2ae, term is ok, but follower's entry's term" + to_string(term_of_local_entry_with_prelog_index) + "of prelog_index " + to_string(prelog_index) + "is BIGGER than rpc's prelog_term" + to_string(prelog_term), server, rpc_lsn);
+                        return;
+                        /*
+                         * 1. 5 nodes with term 1, index [2]
+                         * 2. a trans P (term2), index[1 2], but copy to none
+                         * 3. b trans P (term3), index[1,3], copy to c
+                         * 4. a trans P (term4), and receive client, index [1,2,4], then copy to all, prelog_term is 2,prelog_index is 1,
+                         * so for b and c, index 1 's term is 3, but remote prelog_term is 2, is completely ok.
+                         */
+                    }
+                }
+            }
+
+        }
+    }
+
+    //begin from here
+    void react2rv(tuple<string, int> server, RequestVoteRpc rpc_rv) {
+        int remote_term = rpc_rv.term();
+        int rpc_lsn = rpc_rv.lsn();
+        int remote_latest_term = rpc_rv.latest_term();
+        int remote_latest_index = rpc_rv.lastest_index();
+
+        if (term_ > remote_term) {
+            make_resp_rv(false, "react2rv: term_ > remote,  write back false", server, rpc_lsn);
+            return;
+        } else if (term_ < remote_term) {
+            trans2F(remote_term);
+            //do not return, do logic
+        }
+        if (state_ == candidate || state_ == primary) {
+            make_resp_rv(false, "react2rv: term_ = remote,  write back false", server, rpc_lsn);
+        } else {
+            if (!already_voted_) {  //这个if针对 term_ == term 的情况，只有一票
+                bool should_vote = false;
+                if (entries_.size() == 0) { //只管投票
+                    should_vote = true;
+                } else {
+                    rpc_Entry &lastEntry = entries_.last_entry();
+                    if (lastEntry.term() > remote_term) {
+                        should_vote = false;
+                    } else if (lastEntry.term() < remote_term) {
+                        should_vote = true;
+                    } else {
+                        if (lastEntry.index() > remote_latest_index) { //todo deep think，why this will work，然后我就吃饭去了
+                            should_vote = false;
+                        } else {
+                            should_vote = true;
+                        }
+                    }
+                }
+                if (should_vote) {
+                    make_resp_rv(false, "react2rv: A vote is send", server, rpc_lsn);
+                    already_voted_ = true;
+                } else {
+                    make_resp_rv(false, "react2rv: A_vote is denied for primary doesn't have newer log", server, rpc_lsn);
+                }
+            } else {
+                make_resp_rv(false, "react2rv: No votes left this term", server, rpc_lsn);
+            }
+        }
+        return;
+
+    }
+
+
+    void react2resp_ae(tuple<string, int> server, Resp_AppendEntryRpc &resp_ae) {
+        int remote_term = resp_ae.term();
+        if (term_ < remote_term) {
+            trans2F(remote_term);
+        } else if (term_ > remote_term) {
+            //do nothing, even primary with the correct rpc_lsn, can't do anything for safety, not even response
+        } else {
+            if (state_ == primary) {
+                primary_deal_resp_ae_with_same_term(server, resp_ae);
+            } else {
+                throw "不可能的情况，主ae，收到resp_ae的remote_term与term_相等，但是state不为主，说明一个term出现了两个主，错误";
+            }
+        }
+    }
+
+    void react2resp_rv(tuple<string, int> server, Resp_RequestVoteRpc &resp_rv) {
+        int remote_term = resp_rv.term();
+        if (term_ < remote_term) {
+            trans2F(remote_term);
+        } else if (term_ > remote_term) {
+            //do nothing
+        } else {
+            if (state_ == candidate) {
+                candidate_deal_resp_rv_with_same_term(server, resp_rv);
+            }
+        }
+    }
+
+private:
+    void make_resp_rv(bool vote, string context_log, tuple<string, int> server, int lsn) {
+        Resp_RequestVoteRpc resp_vote;
+        resp_vote.set_ok(vote);
+        resp_vote.set_term(term_);
+        resp_vote.set_lsn(lsn);
+        string msg;
+        resp_vote.SerializeToString(&msg);
+        network_.writeTo(server, msg, [context_log](boost::system::error_code &ec, std::size_t) {
+            if (!ec) {
+                BOOST_LOG_TRIVIAL(debug) << "callback of '" << context_log << "' done";
+            } else {
+                BOOST_LOG_TRIVIAL(info) << "callback of '" << context_log << "' got an error: " << ec;
+            }
+        });
+    }
+
+    void make_resp_ae(bool ok, string context_log, tuple<string, int> server, int lsn) {
+        Resp_AppendEntryRpc resp_entry;
+        resp_entry.set_ok(ok);
+        resp_entry.set_term(term_);
+        resp_entry.set_lsn(lsn);
+        string msg;
+        resp_entry.SerializeToString(&msg);
+        network_.writeTo(server, msg, [context_log](boost::system::error_code &ec, std::size_t) {
+            if (!ec) {
+                BOOST_LOG_TRIVIAL(debug) << "callback of '" << context_log << "' done";
+            } else {
+                BOOST_LOG_TRIVIAL(info) << "callback of '" << context_log << "' got an  error: " << ec;
+            }
+        });
+    }
+
+private: //helper functions, react2rv and react2ae is very simple in some situations (like term_ < remote), but some situations really wants deal(like for resp2rv a vote is granted), we deal them here
     // this is term_ == remote term, otherwise we deal somewhere else(actually just deny or trans2F)
-    void primary_deal_resp_ae(tuple<string, int> server, Resp_AppendEntryRPC &resp_ae) {
+    inline void primary_deal_resp_ae_with_same_term(const tuple<string, int> &server, Resp_AppendEntryRpc &resp_ae) {
         int resp_lsn = resp_ae.lsn();
         int current_rpc_lsn = current_rpc_lsn_[server];
         if (current_rpc_lsn != resp_lsn) {
@@ -393,45 +437,8 @@ private:
         }
     }
 
-
-    void request_votes() {
-        for (auto &server : configuration_) {
-            RV(server);
-        }
-    }
-
-    string build_rpc_rv_string(tuple<string, int> server) {
-        unsigned int server_current_rpc_lsn = current_rpc_lsn_[server];
-        RequestVoteRpc rpc;
-        rpc.set_lsn(server_current_rpc_lsn);
-        rpc.set_term(term_);
-        rpc.set_index(entries_.size() - 1);
-        string msg;
-        rpc.SerializeToString(&msg);
-        int len = 4 + msg.size();
-        //这里有个bug我们先不处理，在msg特别长的时候会出现
-        return to_string(len) + to_string(1) + msg;
-    }
-
-    void RV(tuple<string, int> server) {
-        string rv_rpc_str = build_rpc_rv_string(server);
-        writeTo(server, rv_rpc_str);
-        deadline_timer &timer = retry_timers_[server];
-        int waiting_counts = timer.expires_from_now(boost::posix_time::seconds(random_rv_retry_expire()));
-        if (waiting_counts != 0) {
-            throw "should be zero, a timer can't be interrupt by network, but when AE is called, there should be no hooks on the timer";
-        } else {
-            timer.async_wait([this, server](const boost::system::error_code &error) {
-                if (error == boost::asio::error::operation_aborted) {
-                    //do nothing, maybe log
-                } else {
-                    RV(server);
-                }
-            });
-        }
-    }
-
-    void candidate_deal_resp_rv(tuple<string, int> server, Resp_RequestVoteRpc &resp_rv) {
+    // candidate deal with resp_rv with the same term (because other resp_rv situation is simple, only this one needs a little logic)
+    inline void candidate_deal_resp_rv_with_same_term(const tuple<string, int> &server, Resp_RequestVoteRpc &resp_rv) {
         int resp_lsn = resp_rv.lsn();
         int current_rpc_lsn = current_rpc_lsn_[server];
         if (current_rpc_lsn != resp_lsn) {
@@ -440,29 +447,56 @@ private:
             bool ok = resp_rv.ok();
             if (ok) {
                 winned_votes_++;
-                if (winned_vote2>){
-
-                }else{
-                    // cancel the timer
+                if (winned_votes_ > needed_votes_) {
+                    trans2P();
+                } else {
+                    // cancel the timer, if receive votes, we no longer need to rv more this term
+                    deadline_timer &timer = retry_timers_[server];
+                    timer.cancel();
                 }
-
             } else {
-
+                // this mean remote follower has already voted for other candidate with the same term, just do nothing and let candidate_timer expires to enter the next term candidate
             }
         }
     }
 
+private:
+    void writeTo(tuple<string, int> server, string msg) {
+        network_.writeTo(server, msg, std::bind(&instance::deal_with_write_error, this, std::placeholders::_1, std::placeholders::_2));
+    }
+
+    void deal_with_write_error(boost::system::error_code &ec, std::size_t) {
+        //todo consider what to do when write failed, (maybe not nothing, because a write failed may means network unreachable, let the retry mechanism to deal with it)
+    }
 
 private:
-    //mock 一下先
-    void load_config_from_file() {
-        configuration_ = {
-                {"locahost", 8888},
-                {"locahost", 7777},
-                {"locahost", 9999},
-        };
+    int winned_votes_;
+    int needed_votes_;
+    //可以设置为bool，因为raft规定一个term只能一个主, 考虑这种情况，candidate发出了rv，但是所有f只能接受rv，不能发会resp_rv,但是我的设定中f在收到相同term的rv时不会重传，因为c会自动增加term再rv，只有收到了更高term的rv，f才会resp，所以这里只用bool就够了
+    bool already_voted_;
 
-    }
+    //normal
+    int term_;
+    State state_;
+    io_context &ioContext;
+    vector<std::tuple<string, int>> configuration_;
+
+    //rpc
+    string ip_;
+    int port_;
+    map<std::tuple<string, int>, int> current_rpc_lsn_; //if resp_rpc's lsn != current[server]; then just ignore; (send back the index can't not ensuring idempotence; for example we received a resp which wandereding in the network for 100 years)
+    RPC network_;
+
+    //timers
+    deadline_timer candidate_timer_;
+    map<std::tuple<string, int>, deadline_timer> retry_timers_;
+
+    // log & state machine
+    Entries entries_;
+    map<tuple<string, int>, int> nextIndex_;
+    map<tuple<string, int>, int> Follower_saved_index;
+    // commitIndex 需要持久化，在entries里
+    StateMachine state_machine_;
 };
 
 int main() {

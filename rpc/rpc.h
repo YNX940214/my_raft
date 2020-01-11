@@ -12,16 +12,16 @@ enum RPC_TYPE {
 
 class RPC {
 public:
-    RPC(boost::asio::io_context &io, std::function<void(RPC_TYPE, string, string, int)> cb);
+    RPC(boost::asio::io_context &io, std::function<void(RPC_TYPE, string, std::tuple<string, int> server)> cb);
 
-    void writeTo(string ip, int port, string rpc_msg, std::function<void (boost::system::error_code &ec, std::size_t)> cb); //cb为callback，在RPC::writeTo中根据成功/失败执行下一步动作
+    void writeTo(std::tuple<string, int> server, string rpc_msg, std::function<void(boost::system::error_code &ec, std::size_t)> cb); //cb为callback，在RPC::writeTo中根据成功/失败执行下一步动作
     void startAccept();
 
 private:
 
     boost::asio::io_context &io;
 
-    void getConnection(std::string ip, int port, std::function<void(bool)> cb); //异步的获取connection，需要传入回调
+    void getConnection(std::string ip, int port, std::function<void(boost::system::error_code &ec, std::size_t)> cb); //异步的获取connection，需要传入回调
 
     void accept_callback(const boost::system::error_code &error, tcp::socket peer);
 
@@ -40,7 +40,7 @@ private:
 
 
     RPC_TYPE rpc_type;
-    std::function<void(RPC_TYPE, string msg, string ip, int port)> cb;
+    std::function<void(RPC_TYPE, string msg, std::tuple<string, int> server)> cb;
     char big_char[max_body_length];
     char meta_char[4];
     std::map<string, tcp::socket> _connection_map;

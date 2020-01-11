@@ -61,9 +61,9 @@ extern AppendEntryRpcDefaultTypeInternal _AppendEntryRpc_default_instance_;
 class RequestVoteRpc;
 class RequestVoteRpcDefaultTypeInternal;
 extern RequestVoteRpcDefaultTypeInternal _RequestVoteRpc_default_instance_;
-class Resp_AppendEntryRPC;
-class Resp_AppendEntryRPCDefaultTypeInternal;
-extern Resp_AppendEntryRPCDefaultTypeInternal _Resp_AppendEntryRPC_default_instance_;
+class Resp_AppendEntryRpc;
+class Resp_AppendEntryRpcDefaultTypeInternal;
+extern Resp_AppendEntryRpcDefaultTypeInternal _Resp_AppendEntryRpc_default_instance_;
 class Resp_RequestVoteRpc;
 class Resp_RequestVoteRpcDefaultTypeInternal;
 extern Resp_RequestVoteRpcDefaultTypeInternal _Resp_RequestVoteRpc_default_instance_;
@@ -74,7 +74,7 @@ extern rpc_EntryDefaultTypeInternal _rpc_Entry_default_instance_;
 PROTOBUF_NAMESPACE_OPEN
 template<> ::raft_rpc::AppendEntryRpc* Arena::CreateMaybeMessage<::raft_rpc::AppendEntryRpc>(Arena*);
 template<> ::raft_rpc::RequestVoteRpc* Arena::CreateMaybeMessage<::raft_rpc::RequestVoteRpc>(Arena*);
-template<> ::raft_rpc::Resp_AppendEntryRPC* Arena::CreateMaybeMessage<::raft_rpc::Resp_AppendEntryRPC>(Arena*);
+template<> ::raft_rpc::Resp_AppendEntryRpc* Arena::CreateMaybeMessage<::raft_rpc::Resp_AppendEntryRpc>(Arena*);
 template<> ::raft_rpc::Resp_RequestVoteRpc* Arena::CreateMaybeMessage<::raft_rpc::Resp_RequestVoteRpc>(Arena*);
 template<> ::raft_rpc::rpc_Entry* Arena::CreateMaybeMessage<::raft_rpc::rpc_Entry>(Arena*);
 PROTOBUF_NAMESPACE_CLOSE
@@ -191,6 +191,7 @@ class rpc_Entry :
     kMsgFieldNumber = 2,
     kTermFieldNumber = 1,
     kLsnFieldNumber = 3,
+    kIndexFieldNumber = 4,
   };
   // string msg = 2;
   void clear_msg();
@@ -226,6 +227,15 @@ class rpc_Entry :
   void _internal_set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value);
   public:
 
+  // int32 index = 4;
+  void clear_index();
+  ::PROTOBUF_NAMESPACE_ID::int32 index() const;
+  void set_index(::PROTOBUF_NAMESPACE_ID::int32 value);
+  private:
+  ::PROTOBUF_NAMESPACE_ID::int32 _internal_index() const;
+  void _internal_set_index(::PROTOBUF_NAMESPACE_ID::int32 value);
+  public:
+
   // @@protoc_insertion_point(class_scope:raft_rpc.rpc_Entry)
  private:
   class _Internal;
@@ -234,6 +244,7 @@ class rpc_Entry :
   ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr msg_;
   ::PROTOBUF_NAMESPACE_ID::int32 term_;
   ::PROTOBUF_NAMESPACE_ID::int32 lsn_;
+  ::PROTOBUF_NAMESPACE_ID::int32 index_;
   mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   friend struct ::TableStruct_rpc_2eproto;
 };
@@ -347,7 +358,6 @@ class AppendEntryRpc :
   enum : int {
     kEntryFieldNumber = 6,
     kTermFieldNumber = 1,
-    kIndexFieldNumber = 2,
     kPrelogTermFieldNumber = 3,
     kCommitIndexFieldNumber = 5,
     kLsnFieldNumber = 7,
@@ -377,15 +387,6 @@ class AppendEntryRpc :
   private:
   ::PROTOBUF_NAMESPACE_ID::int32 _internal_term() const;
   void _internal_set_term(::PROTOBUF_NAMESPACE_ID::int32 value);
-  public:
-
-  // int32 index = 2;
-  void clear_index();
-  ::PROTOBUF_NAMESPACE_ID::int32 index() const;
-  void set_index(::PROTOBUF_NAMESPACE_ID::int32 value);
-  private:
-  ::PROTOBUF_NAMESPACE_ID::int32 _internal_index() const;
-  void _internal_set_index(::PROTOBUF_NAMESPACE_ID::int32 value);
   public:
 
   // int32 prelog_term = 3;
@@ -422,7 +423,6 @@ class AppendEntryRpc :
   ::PROTOBUF_NAMESPACE_ID::internal::InternalMetadataWithArena _internal_metadata_;
   ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::raft_rpc::rpc_Entry > entry_;
   ::PROTOBUF_NAMESPACE_ID::int32 term_;
-  ::PROTOBUF_NAMESPACE_ID::int32 index_;
   ::PROTOBUF_NAMESPACE_ID::int32 prelog_term_;
   ::PROTOBUF_NAMESPACE_ID::int32 commit_index_;
   ::PROTOBUF_NAMESPACE_ID::int32 lsn_;
@@ -431,23 +431,23 @@ class AppendEntryRpc :
 };
 // -------------------------------------------------------------------
 
-class Resp_AppendEntryRPC :
-    public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:raft_rpc.Resp_AppendEntryRPC) */ {
+class Resp_AppendEntryRpc :
+    public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:raft_rpc.Resp_AppendEntryRpc) */ {
  public:
-  Resp_AppendEntryRPC();
-  virtual ~Resp_AppendEntryRPC();
+  Resp_AppendEntryRpc();
+  virtual ~Resp_AppendEntryRpc();
 
-  Resp_AppendEntryRPC(const Resp_AppendEntryRPC& from);
-  Resp_AppendEntryRPC(Resp_AppendEntryRPC&& from) noexcept
-    : Resp_AppendEntryRPC() {
+  Resp_AppendEntryRpc(const Resp_AppendEntryRpc& from);
+  Resp_AppendEntryRpc(Resp_AppendEntryRpc&& from) noexcept
+    : Resp_AppendEntryRpc() {
     *this = ::std::move(from);
   }
 
-  inline Resp_AppendEntryRPC& operator=(const Resp_AppendEntryRPC& from) {
+  inline Resp_AppendEntryRpc& operator=(const Resp_AppendEntryRpc& from) {
     CopyFrom(from);
     return *this;
   }
-  inline Resp_AppendEntryRPC& operator=(Resp_AppendEntryRPC&& from) noexcept {
+  inline Resp_AppendEntryRpc& operator=(Resp_AppendEntryRpc&& from) noexcept {
     if (GetArenaNoVirtual() == from.GetArenaNoVirtual()) {
       if (this != &from) InternalSwap(&from);
     } else {
@@ -465,37 +465,37 @@ class Resp_AppendEntryRPC :
   static const ::PROTOBUF_NAMESPACE_ID::Reflection* GetReflection() {
     return GetMetadataStatic().reflection;
   }
-  static const Resp_AppendEntryRPC& default_instance();
+  static const Resp_AppendEntryRpc& default_instance();
 
   static void InitAsDefaultInstance();  // FOR INTERNAL USE ONLY
-  static inline const Resp_AppendEntryRPC* internal_default_instance() {
-    return reinterpret_cast<const Resp_AppendEntryRPC*>(
-               &_Resp_AppendEntryRPC_default_instance_);
+  static inline const Resp_AppendEntryRpc* internal_default_instance() {
+    return reinterpret_cast<const Resp_AppendEntryRpc*>(
+               &_Resp_AppendEntryRpc_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
     2;
 
-  friend void swap(Resp_AppendEntryRPC& a, Resp_AppendEntryRPC& b) {
+  friend void swap(Resp_AppendEntryRpc& a, Resp_AppendEntryRpc& b) {
     a.Swap(&b);
   }
-  inline void Swap(Resp_AppendEntryRPC* other) {
+  inline void Swap(Resp_AppendEntryRpc* other) {
     if (other == this) return;
     InternalSwap(other);
   }
 
   // implements Message ----------------------------------------------
 
-  inline Resp_AppendEntryRPC* New() const final {
-    return CreateMaybeMessage<Resp_AppendEntryRPC>(nullptr);
+  inline Resp_AppendEntryRpc* New() const final {
+    return CreateMaybeMessage<Resp_AppendEntryRpc>(nullptr);
   }
 
-  Resp_AppendEntryRPC* New(::PROTOBUF_NAMESPACE_ID::Arena* arena) const final {
-    return CreateMaybeMessage<Resp_AppendEntryRPC>(arena);
+  Resp_AppendEntryRpc* New(::PROTOBUF_NAMESPACE_ID::Arena* arena) const final {
+    return CreateMaybeMessage<Resp_AppendEntryRpc>(arena);
   }
   void CopyFrom(const ::PROTOBUF_NAMESPACE_ID::Message& from) final;
   void MergeFrom(const ::PROTOBUF_NAMESPACE_ID::Message& from) final;
-  void CopyFrom(const Resp_AppendEntryRPC& from);
-  void MergeFrom(const Resp_AppendEntryRPC& from);
+  void CopyFrom(const Resp_AppendEntryRpc& from);
+  void MergeFrom(const Resp_AppendEntryRpc& from);
   PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
   bool IsInitialized() const final;
 
@@ -509,10 +509,10 @@ class Resp_AppendEntryRPC :
   inline void SharedCtor();
   inline void SharedDtor();
   void SetCachedSize(int size) const final;
-  void InternalSwap(Resp_AppendEntryRPC* other);
+  void InternalSwap(Resp_AppendEntryRpc* other);
   friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
   static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
-    return "raft_rpc.Resp_AppendEntryRPC";
+    return "raft_rpc.Resp_AppendEntryRpc";
   }
   private:
   inline ::PROTOBUF_NAMESPACE_ID::Arena* GetArenaNoVirtual() const {
@@ -568,7 +568,7 @@ class Resp_AppendEntryRPC :
   void _internal_set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value);
   public:
 
-  // @@protoc_insertion_point(class_scope:raft_rpc.Resp_AppendEntryRPC)
+  // @@protoc_insertion_point(class_scope:raft_rpc.Resp_AppendEntryRpc)
  private:
   class _Internal;
 
@@ -688,8 +688,9 @@ class RequestVoteRpc :
 
   enum : int {
     kTermFieldNumber = 1,
-    kIndexFieldNumber = 2,
-    kLsnFieldNumber = 3,
+    kLatestIndexFieldNumber = 2,
+    kLatestTermFieldNumber = 3,
+    kLsnFieldNumber = 4,
   };
   // int32 term = 1;
   void clear_term();
@@ -700,16 +701,25 @@ class RequestVoteRpc :
   void _internal_set_term(::PROTOBUF_NAMESPACE_ID::int32 value);
   public:
 
-  // int32 index = 2;
-  void clear_index();
-  ::PROTOBUF_NAMESPACE_ID::int32 index() const;
-  void set_index(::PROTOBUF_NAMESPACE_ID::int32 value);
+  // int32 latest_index = 2;
+  void clear_latest_index();
+  ::PROTOBUF_NAMESPACE_ID::int32 latest_index() const;
+  void set_latest_index(::PROTOBUF_NAMESPACE_ID::int32 value);
   private:
-  ::PROTOBUF_NAMESPACE_ID::int32 _internal_index() const;
-  void _internal_set_index(::PROTOBUF_NAMESPACE_ID::int32 value);
+  ::PROTOBUF_NAMESPACE_ID::int32 _internal_latest_index() const;
+  void _internal_set_latest_index(::PROTOBUF_NAMESPACE_ID::int32 value);
   public:
 
-  // int32 lsn = 3;
+  // int32 latest_term = 3;
+  void clear_latest_term();
+  ::PROTOBUF_NAMESPACE_ID::int32 latest_term() const;
+  void set_latest_term(::PROTOBUF_NAMESPACE_ID::int32 value);
+  private:
+  ::PROTOBUF_NAMESPACE_ID::int32 _internal_latest_term() const;
+  void _internal_set_latest_term(::PROTOBUF_NAMESPACE_ID::int32 value);
+  public:
+
+  // int32 lsn = 4;
   void clear_lsn();
   ::PROTOBUF_NAMESPACE_ID::int32 lsn() const;
   void set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value);
@@ -724,7 +734,8 @@ class RequestVoteRpc :
 
   ::PROTOBUF_NAMESPACE_ID::internal::InternalMetadataWithArena _internal_metadata_;
   ::PROTOBUF_NAMESPACE_ID::int32 term_;
-  ::PROTOBUF_NAMESPACE_ID::int32 index_;
+  ::PROTOBUF_NAMESPACE_ID::int32 latest_index_;
+  ::PROTOBUF_NAMESPACE_ID::int32 latest_term_;
   ::PROTOBUF_NAMESPACE_ID::int32 lsn_;
   mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   friend struct ::TableStruct_rpc_2eproto;
@@ -990,6 +1001,26 @@ inline void rpc_Entry::set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value) {
   // @@protoc_insertion_point(field_set:raft_rpc.rpc_Entry.lsn)
 }
 
+// int32 index = 4;
+inline void rpc_Entry::clear_index() {
+  index_ = 0;
+}
+inline ::PROTOBUF_NAMESPACE_ID::int32 rpc_Entry::_internal_index() const {
+  return index_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::int32 rpc_Entry::index() const {
+  // @@protoc_insertion_point(field_get:raft_rpc.rpc_Entry.index)
+  return _internal_index();
+}
+inline void rpc_Entry::_internal_set_index(::PROTOBUF_NAMESPACE_ID::int32 value) {
+  
+  index_ = value;
+}
+inline void rpc_Entry::set_index(::PROTOBUF_NAMESPACE_ID::int32 value) {
+  _internal_set_index(value);
+  // @@protoc_insertion_point(field_set:raft_rpc.rpc_Entry.index)
+}
+
 // -------------------------------------------------------------------
 
 // AppendEntryRpc
@@ -1012,26 +1043,6 @@ inline void AppendEntryRpc::_internal_set_term(::PROTOBUF_NAMESPACE_ID::int32 va
 inline void AppendEntryRpc::set_term(::PROTOBUF_NAMESPACE_ID::int32 value) {
   _internal_set_term(value);
   // @@protoc_insertion_point(field_set:raft_rpc.AppendEntryRpc.term)
-}
-
-// int32 index = 2;
-inline void AppendEntryRpc::clear_index() {
-  index_ = 0;
-}
-inline ::PROTOBUF_NAMESPACE_ID::int32 AppendEntryRpc::_internal_index() const {
-  return index_;
-}
-inline ::PROTOBUF_NAMESPACE_ID::int32 AppendEntryRpc::index() const {
-  // @@protoc_insertion_point(field_get:raft_rpc.AppendEntryRpc.index)
-  return _internal_index();
-}
-inline void AppendEntryRpc::_internal_set_index(::PROTOBUF_NAMESPACE_ID::int32 value) {
-  
-  index_ = value;
-}
-inline void AppendEntryRpc::set_index(::PROTOBUF_NAMESPACE_ID::int32 value) {
-  _internal_set_index(value);
-  // @@protoc_insertion_point(field_set:raft_rpc.AppendEntryRpc.index)
 }
 
 // int32 prelog_term = 3;
@@ -1135,66 +1146,66 @@ inline void AppendEntryRpc::set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value) {
 
 // -------------------------------------------------------------------
 
-// Resp_AppendEntryRPC
+// Resp_AppendEntryRpc
 
 // bool ok = 1;
-inline void Resp_AppendEntryRPC::clear_ok() {
+inline void Resp_AppendEntryRpc::clear_ok() {
   ok_ = false;
 }
-inline bool Resp_AppendEntryRPC::_internal_ok() const {
+inline bool Resp_AppendEntryRpc::_internal_ok() const {
   return ok_;
 }
-inline bool Resp_AppendEntryRPC::ok() const {
-  // @@protoc_insertion_point(field_get:raft_rpc.Resp_AppendEntryRPC.ok)
+inline bool Resp_AppendEntryRpc::ok() const {
+  // @@protoc_insertion_point(field_get:raft_rpc.Resp_AppendEntryRpc.ok)
   return _internal_ok();
 }
-inline void Resp_AppendEntryRPC::_internal_set_ok(bool value) {
+inline void Resp_AppendEntryRpc::_internal_set_ok(bool value) {
   
   ok_ = value;
 }
-inline void Resp_AppendEntryRPC::set_ok(bool value) {
+inline void Resp_AppendEntryRpc::set_ok(bool value) {
   _internal_set_ok(value);
-  // @@protoc_insertion_point(field_set:raft_rpc.Resp_AppendEntryRPC.ok)
+  // @@protoc_insertion_point(field_set:raft_rpc.Resp_AppendEntryRpc.ok)
 }
 
 // int32 term = 2;
-inline void Resp_AppendEntryRPC::clear_term() {
+inline void Resp_AppendEntryRpc::clear_term() {
   term_ = 0;
 }
-inline ::PROTOBUF_NAMESPACE_ID::int32 Resp_AppendEntryRPC::_internal_term() const {
+inline ::PROTOBUF_NAMESPACE_ID::int32 Resp_AppendEntryRpc::_internal_term() const {
   return term_;
 }
-inline ::PROTOBUF_NAMESPACE_ID::int32 Resp_AppendEntryRPC::term() const {
-  // @@protoc_insertion_point(field_get:raft_rpc.Resp_AppendEntryRPC.term)
+inline ::PROTOBUF_NAMESPACE_ID::int32 Resp_AppendEntryRpc::term() const {
+  // @@protoc_insertion_point(field_get:raft_rpc.Resp_AppendEntryRpc.term)
   return _internal_term();
 }
-inline void Resp_AppendEntryRPC::_internal_set_term(::PROTOBUF_NAMESPACE_ID::int32 value) {
+inline void Resp_AppendEntryRpc::_internal_set_term(::PROTOBUF_NAMESPACE_ID::int32 value) {
   
   term_ = value;
 }
-inline void Resp_AppendEntryRPC::set_term(::PROTOBUF_NAMESPACE_ID::int32 value) {
+inline void Resp_AppendEntryRpc::set_term(::PROTOBUF_NAMESPACE_ID::int32 value) {
   _internal_set_term(value);
-  // @@protoc_insertion_point(field_set:raft_rpc.Resp_AppendEntryRPC.term)
+  // @@protoc_insertion_point(field_set:raft_rpc.Resp_AppendEntryRpc.term)
 }
 
 // int32 lsn = 3;
-inline void Resp_AppendEntryRPC::clear_lsn() {
+inline void Resp_AppendEntryRpc::clear_lsn() {
   lsn_ = 0;
 }
-inline ::PROTOBUF_NAMESPACE_ID::int32 Resp_AppendEntryRPC::_internal_lsn() const {
+inline ::PROTOBUF_NAMESPACE_ID::int32 Resp_AppendEntryRpc::_internal_lsn() const {
   return lsn_;
 }
-inline ::PROTOBUF_NAMESPACE_ID::int32 Resp_AppendEntryRPC::lsn() const {
-  // @@protoc_insertion_point(field_get:raft_rpc.Resp_AppendEntryRPC.lsn)
+inline ::PROTOBUF_NAMESPACE_ID::int32 Resp_AppendEntryRpc::lsn() const {
+  // @@protoc_insertion_point(field_get:raft_rpc.Resp_AppendEntryRpc.lsn)
   return _internal_lsn();
 }
-inline void Resp_AppendEntryRPC::_internal_set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value) {
+inline void Resp_AppendEntryRpc::_internal_set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value) {
   
   lsn_ = value;
 }
-inline void Resp_AppendEntryRPC::set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value) {
+inline void Resp_AppendEntryRpc::set_lsn(::PROTOBUF_NAMESPACE_ID::int32 value) {
   _internal_set_lsn(value);
-  // @@protoc_insertion_point(field_set:raft_rpc.Resp_AppendEntryRPC.lsn)
+  // @@protoc_insertion_point(field_set:raft_rpc.Resp_AppendEntryRpc.lsn)
 }
 
 // -------------------------------------------------------------------
@@ -1221,27 +1232,47 @@ inline void RequestVoteRpc::set_term(::PROTOBUF_NAMESPACE_ID::int32 value) {
   // @@protoc_insertion_point(field_set:raft_rpc.RequestVoteRpc.term)
 }
 
-// int32 index = 2;
-inline void RequestVoteRpc::clear_index() {
-  index_ = 0;
+// int32 latest_index = 2;
+inline void RequestVoteRpc::clear_latest_index() {
+  latest_index_ = 0;
 }
-inline ::PROTOBUF_NAMESPACE_ID::int32 RequestVoteRpc::_internal_index() const {
-  return index_;
+inline ::PROTOBUF_NAMESPACE_ID::int32 RequestVoteRpc::_internal_latest_index() const {
+  return latest_index_;
 }
-inline ::PROTOBUF_NAMESPACE_ID::int32 RequestVoteRpc::index() const {
-  // @@protoc_insertion_point(field_get:raft_rpc.RequestVoteRpc.index)
-  return _internal_index();
+inline ::PROTOBUF_NAMESPACE_ID::int32 RequestVoteRpc::latest_index() const {
+  // @@protoc_insertion_point(field_get:raft_rpc.RequestVoteRpc.latest_index)
+  return _internal_latest_index();
 }
-inline void RequestVoteRpc::_internal_set_index(::PROTOBUF_NAMESPACE_ID::int32 value) {
+inline void RequestVoteRpc::_internal_set_latest_index(::PROTOBUF_NAMESPACE_ID::int32 value) {
   
-  index_ = value;
+  latest_index_ = value;
 }
-inline void RequestVoteRpc::set_index(::PROTOBUF_NAMESPACE_ID::int32 value) {
-  _internal_set_index(value);
-  // @@protoc_insertion_point(field_set:raft_rpc.RequestVoteRpc.index)
+inline void RequestVoteRpc::set_latest_index(::PROTOBUF_NAMESPACE_ID::int32 value) {
+  _internal_set_latest_index(value);
+  // @@protoc_insertion_point(field_set:raft_rpc.RequestVoteRpc.latest_index)
 }
 
-// int32 lsn = 3;
+// int32 latest_term = 3;
+inline void RequestVoteRpc::clear_latest_term() {
+  latest_term_ = 0;
+}
+inline ::PROTOBUF_NAMESPACE_ID::int32 RequestVoteRpc::_internal_latest_term() const {
+  return latest_term_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::int32 RequestVoteRpc::latest_term() const {
+  // @@protoc_insertion_point(field_get:raft_rpc.RequestVoteRpc.latest_term)
+  return _internal_latest_term();
+}
+inline void RequestVoteRpc::_internal_set_latest_term(::PROTOBUF_NAMESPACE_ID::int32 value) {
+  
+  latest_term_ = value;
+}
+inline void RequestVoteRpc::set_latest_term(::PROTOBUF_NAMESPACE_ID::int32 value) {
+  _internal_set_latest_term(value);
+  // @@protoc_insertion_point(field_set:raft_rpc.RequestVoteRpc.latest_term)
+}
+
+// int32 lsn = 4;
 inline void RequestVoteRpc::clear_lsn() {
   lsn_ = 0;
 }

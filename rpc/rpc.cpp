@@ -8,11 +8,13 @@ string __get_ip_from_socket__(tcp::socket &peer) {
     return ip;
 }
 
-RPC::RPC(boost::asio::io_context &io, std::function<void(RPC_TYPE, string, string, int)> cb) : _acceptor(io), io(io), cb(cb) {
+RPC::RPC(boost::asio::io_context &io, std::function<void(RPC_TYPE, string, std::tuple<string, int> server)> cb) : _acceptor(io), io(io), cb(cb) {
 }
 
-void RPC::writeTo(string ip, int port, string rpc_msg, std::function<void(boost::system::error_code &ec, std::size_t)> cb) {
+void RPC::writeTo(std::tuple<string, int> server, string rpc_msg, std::function<void(boost::system::error_code &ec, std::size_t)> cb) {
     try {
+        string ip = std::get<0>(server);
+        int port = std::get<1>(server);
         //如果网络不可达到，tcp建立链接不能成功
         getConnection(ip, port, cb);
     } catch () { //catch boost tcp connection failed
@@ -57,13 +59,19 @@ void RPC::read_body(tcp::socket peer, const boost::system::error_code &error, si
     }
 }
 
+std::tuple<string, int> get_server_socket(const tcp::socket &peer) {
+
+}
+
 void RPC::body_callback(tcp::socket peer, const boost::system::error_code &error, size_t bytes_transferred) {
     if (error) {
         BOOST_LOG_TRIVIAL(error) << error;
 //        peer.cancel() or close()?
     } else {
-        char char_rpc_type[5] = "";
-        memcpy(char_rpc_type, big_char, 4);
+        //todo 这里换成1byte了，但是代码仍然是4byte
+        unsigned int len_type = 1;
+        char char_rpc_type[1] = "";
+        memcpy(char_rpc_type, big_char, len_type);
         int remote_rpc_type = atoi(char_rpc_type);
         //todo 能否更合理的转换
         if (remote_rpc_type == 1) {
@@ -77,8 +85,9 @@ void RPC::body_callback(tcp::socket peer, const boost::system::error_code &error
         } else {
             rpc_type = ERROR;
         }
-        string msg(big_char + 4, bytes_transferred - 4); //纯的msg，不包括rpc type，比如已知rpc_type为Resp_AppendEntryRPC，那么msg的内容为{ ok=true, term =10}
-        cb(rpc_type, msg);
+        std::tuple<string, int> server = get_server_socket(peer);
+        string msg(big_char + len_type, bytes_transferred - len_type); //纯的msg，不包括rpc type，比如已知rpc_type为Resp_AppendEntryRPC，那么msg的内容为{ ok=true, term =10}
+        cb(rpc_type, msg, server);
     }
 }
 

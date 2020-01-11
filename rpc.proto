@@ -5,7 +5,7 @@ message rpc_Entry {
     int32 term = 1;
     string msg = 2;
     int32 lsn = 3; //all rpc and resp should embed lsn, to keep idempotence
-    int32 index=4;  // we can't put index in ae rpc, because: if we want to send an empty HB, we only need the term in ae
+    int32 index = 4; // we can't put index in ae rpc, because: if we want to send an empty HB, we only need the term in ae
 
 
 }
@@ -20,7 +20,7 @@ message AppendEntryRpc {
 }
 
 
-message Resp_AppendEntryRPC {
+message Resp_AppendEntryRpc {
     bool ok = 1;
     int32 term = 2;
     int32 lsn = 3;
@@ -30,8 +30,9 @@ message Resp_AppendEntryRPC {
 
 message RequestVoteRpc {
     int32 term = 1;
-    int32 index = 2;
-    int32 lsn = 3;
+    int32 latest_index = 2;
+    int32 latest_term = 3;
+    int32 lsn = 4;
 
 }
 
