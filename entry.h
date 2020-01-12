@@ -17,19 +17,17 @@ using raft_rpc::rpc_Entry;
 
 class Entries {
 public:
-    rpc_Entry get(int index);
+    const rpc_Entry &get(int index);
 
-    unsigned get_commit_index();
+    unsigned int get_commit_index();
 
-    void insert(unsigned prelog_index,rpc_Entry &entry); //同步接口,自动根据插入位置插入，并删除插入位置之后的entry
+    void insert(unsigned prelog_index, const rpc_Entry &entry); //同步接口,自动根据插入位置插入，并删除插入位置之后的entry
 
     void update_commit_index(unsigned remote_commit_index, unsigned remote_prelog_index);
-
-    rpc_Entry &last_entry();
-
+    
     unsigned size();
 
-    const rpc_Entry &operator[](unsigned i) const;
+//    const rpc_Entry &operator[](unsigned i) const;
 
 private:
     unsigned _commit_index;

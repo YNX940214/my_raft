@@ -39,7 +39,7 @@ public:
             state_machine_(),
             winned_votes_(0) {
         load_config_from_file();
-        for (auto server_tuple: configuration_) {
+        for (const auto &server_tuple: configuration_) {
             nextIndex_[server_tuple] = -1; // -1 not 0, because at the beginning, entries[0] raise Exception,
             Follower_saved_index[server_tuple] = 0;
             current_rpc_lsn_[server_tuple] = 0;
@@ -60,7 +60,7 @@ public:
         network_.startAccept();
         int waiting_counts = candidate_timer_.expires_from_now(boost::posix_time::seconds(random_candidate_expire()));
         if (waiting_counts == 0) {
-            throw "初始化阶段这里不可能为0";
+            throw std::logic_error("初始化阶段这里不可能为0");
         } else {
             candidate_timer_.async_wait([this](const boost::system::error_code &error) {
                 if (error == boost::asio::error::operation_aborted) {
@@ -81,7 +81,7 @@ private:
         state_ = follower;
         int waiting_count = candidate_timer_.expires_from_now(boost::posix_time::seconds(random_candidate_expire()));
         if (waiting_count == 0) {
-            throw "trans2F是因为收到了外界rpc切换成follower，所以至少有一个cb_tran2_candidate的定时器，否则就是未考虑的情况";
+            throw std::logic_error("trans2F是因为收到了外界rpc切换成follower，所以至少有一个cb_tran2_candidate的定时器，否则就是未考虑的情况");
         }
         candidate_timer_.async_wait([this](const boost::system::error_code &error) {
             if (error == boost::asio::error::operation_aborted) {
@@ -95,7 +95,7 @@ private:
     void trans2P() {
         //todo cancel all timers(maybe, need a deeper think)
         state_ = primary;
-        for (auto server: configuration_) {
+        for (const auto &server: configuration_) {
             AE(server);
         }
     }
@@ -111,7 +111,7 @@ private:
             //完全可能出现这种情况，如果是cb_trans2_candidate的定时器自然到期，waiting_count就是0
             //leave behind
         } else {
-            throw ("trans2C只能是timer_candidate_expire自然到期触发，所以不可能有waiting_count不为0的情况，否则就是未考虑的情况");
+            throw std::logic_error("trans2C只能是timer_candidate_expire自然到期触发，所以不可能有waiting_count不为0的情况，否则就是未考虑的情况");
         }
         for (auto &server : configuration_) {
             RV(server);
@@ -119,7 +119,7 @@ private:
     }
 
 private:
-    string build_rpc_ae_string(tuple<string, int> server) {
+    string build_rpc_ae_string(const tuple<string, int> &server) {
         unsigned int server_current_rpc_lsn = current_rpc_lsn_[server];
         AppendEntryRpc rpc;
         rpc.set_lsn(server_current_rpc_lsn);
@@ -136,8 +136,11 @@ private:
         if (index_to_send == entries_.size()) {
             //empty rpc as HB
         } else {
-            rpc_Entry entry = entries_.get(index_to_send);  //如何做Entry到protobuf的映射？
-            rpc.set_rpc_Entry(entry);  //有空看下protobuf是怎么用 这个nested的变量的
+            const rpc_Entry &entry = entries_.get(index_to_send);  //如何做Entry到protobuf的映射？
+            rpc_Entry *entry_to_send = rpc.add_entry();
+            entry_to_send->set_term(entry.term());
+            entry_to_send->set_msg(entry.msg());
+            entry_to_send->set_index(entry.index());
         }
         string msg;
         rpc.SerializeToString(&msg);
@@ -145,13 +148,13 @@ private:
         return to_string(len) + to_string(1) + msg;
     }
 
-    void AE(tuple<string, int> server) { //todo 设定重传timer！
+    void AE(const tuple<string, int> &server) {
         string ae_rpc_str = build_rpc_ae_string(server);
         writeTo(server, ae_rpc_str);   //考虑如下场景，发了AE1,index为100,然后定时器到期重发了AE2,index为100，这时候收到ae1的resp为false，将index--,如果ae2到F，又触发了一次resp，这两个rpc的请求一样，resp一样，但是P收到两个一样的resp会将index--两次
         deadline_timer &t1 = retry_timers_[server];
         int waiting_counts = t1.expires_from_now(boost::posix_time::seconds(random_ae_retry_expire()));
         if (waiting_counts != 0) {
-            throw "should be zero, a timer can't be interrupt by network, but when AE is called, there should be no hooks on the timer";
+            throw std::logic_error("should be zero, a timer can't be interrupt by network, but when AE is called, there should be no hooks on the timer");
         } else {
             t1.async_wait([this, server](const boost::system::error_code &error) {
                 if (error == boost::asio::error::operation_aborted) {
@@ -167,12 +170,12 @@ private:
         }
     }
 
-    string build_rpc_rv_string(tuple<string, int> server) {
+    string build_rpc_rv_string(const tuple<string, int> &server) {
         unsigned int server_current_rpc_lsn = current_rpc_lsn_[server];
         RequestVoteRpc rpc;
         rpc.set_lsn(server_current_rpc_lsn);
         rpc.set_term(term_);
-        rpc.set_index(entries_.size() - 1);
+        rpc.set_latest_index(entries_.size() - 1);
         string msg;
         rpc.SerializeToString(&msg);
         int len = 4 + msg.size();
@@ -180,13 +183,13 @@ private:
         return to_string(len) + to_string(1) + msg;
     }
 
-    void RV(tuple<string, int> server) {
+    void RV(const tuple<string, int> &server) {
         string rv_rpc_str = build_rpc_rv_string(server);
         writeTo(server, rv_rpc_str);
         deadline_timer &timer = retry_timers_[server];
         int waiting_counts = timer.expires_from_now(boost::posix_time::seconds(random_rv_retry_expire()));
         if (waiting_counts != 0) {
-            throw "should be zero, a timer can't be interrupt by network, but when AE is called, there should be no hooks on the timer";
+            throw std::logic_error("should be zero, a timer can't be interrupt by network, but when AE is called, there should be no hooks on the timer");
         } else {
             timer.async_wait([this, server](const boost::system::error_code &error) {
                 if (error == boost::asio::error::operation_aborted) {
@@ -199,7 +202,7 @@ private:
     }
 
 private:
-    void reactToIncomingMsg(RPC_TYPE rpc_type_, string msg, tuple<string, int> server) {
+    void reactToIncomingMsg(RPC_TYPE rpc_type_, const string msg, const tuple<string, int> &server) {
         //proto buf decode
         if (rpc_type_ == REQUEST_VOTE) {
             RequestVoteRpc rv;
@@ -222,20 +225,19 @@ private:
         }
     }
 
-    void react2ae(tuple<string, int> server, AppendEntryRpc rpc_ae) {
+    void react2ae(const tuple<string, int> &server, AppendEntryRpc rpc_ae) {
         int remote_term = rpc_ae.term();
-        raft_rpc::rpc_Entry entry = rpc_ae.entry(); //这里有点蛋疼，protobuf很难用，先放着，假设抽象好了
         int prelog_term = rpc_ae.prelog_term();
-        int prelog_index = entry.index() - 1;
         int commit_index = rpc_ae.commit_index();
         int rpc_lsn = rpc_ae.lsn();
+
         // 这行错了!       assert(commitIndex <= prelog_index); 完全有可能出现commitIndex比prelog_index大的情况
         if (term_ > remote_term) {
             make_resp_ae(false, "react2ae, term_ > term", server, rpc_lsn);
             return;
         } else { //term_ <= remote_term
             if (state_ == primary && term_ == remote_term) {
-                throw "error, one term has two primaries";
+                throw std::logic_error("error, one term has two primaries");
             }
             trans2F(remote_term);//会设置定时器，所以此函数不需要设置定时器了
             /*
@@ -243,39 +245,52 @@ private:
              但是一想不对，因为rpc的commitIndex可能比prelog_index大，假设本地和主同步的entry是0到20，21到100都是stale的entry，rpc传来一个commitIndex为50，prelog_index为80（还没走到真确的20），
              难道那个线程就无脑把到80的entry给apply了？所以本地的commitIndex只能是
              */
-            if (prelog_term == -1) { //see AE, we set prelog_term to -1 as this is the index0 log of primary, the follower has to accept it
-
-            } else {
-                unsigned last_index = entries_.size() - 1;
-                if (last_index < prelog_index) {
-                    make_resp_ae(false, "react2ae, term is ok, but follower's last entry index is " + to_string(last_index) + ", but prelog_index is " + to_string(prelog_index), server);
+            int rpc_ae_entry_size = rpc_ae.entry_size();
+            if (rpc_ae_entry_size == 0) { // empty ae, means that this primary thinks this follower has already catch up with it
+                make_resp_ae(true, "成功insert", server, rpc_lsn);
+                return;
+            } else if (rpc_ae_entry_size == 1) {
+                const raft_rpc::rpc_Entry &entry = rpc_ae.entry(0);
+                int prelog_index = entry.index() - 1;
+                if (prelog_term == -1) { //see AE, we set prelog_term to -1 as this is the index0 log of primary, the follower has to accept it
+                    entries_.insert(0, entry);
+                    // we choose the smaller one to be the commit index, the logic is in entries_.update_commit_index function
+                    entries_.update_commit_index(commit_index, prelog_index);
+                    make_resp_ae(true, "成功insert", server, rpc_lsn);
                     return;
-                } else { // if (last_index >= prelog_index)  注意> 和 = 的情况是一样的，（至少目前我是这么认为的）
-                    int term_of_local_entry_with_prelog_index = entries_[prelog_index].term();
-                    if (term_of_local_entry_with_prelog_index == prelog_term) {
-                        entries_.insert(prelog_index + 1, entry);
-                        // we choose the smaller one to be the commit index, the logic is in entries_.update_commit_index function
-                        entries_.update_commit_index(commit_index, prelog_index);
-                        make_resp_ae(true, "成功insert", server, rpc_lsn);
+                } else {
+                    unsigned last_index = entries_.size() - 1;
+                    if (last_index < prelog_index) {
+                        make_resp_ae(false, "react2ae, term is ok, but follower's last entry index is " + to_string(last_index) + ", but prelog_index is " + to_string(prelog_index), server, rpc_lsn);
                         return;
-                    } else if (term_of_local_entry_with_prelog_index < prelog_term) {
-                        // easy to make an example
-                        make_resp_ae(false, "react2ae, term is ok, but follower's entry's term" + to_string(term_of_local_entry_with_prelog_index) + "of prelog_index " + to_string(prelog_index) + "is SMALLER than rpc's prelog_term" + to_string(prelog_term), server, rpc_lsn);
-                        return;
-                    } else {
-                        make_resp_ae(false, "react2ae, term is ok, but follower's entry's term" + to_string(term_of_local_entry_with_prelog_index) + "of prelog_index " + to_string(prelog_index) + "is BIGGER than rpc's prelog_term" + to_string(prelog_term), server, rpc_lsn);
-                        return;
-                        /*
-                         * 1. 5 nodes with term 1, index [2]
-                         * 2. a trans P (term2), index[1 2], but copy to none
-                         * 3. b trans P (term3), index[1,3], copy to c
-                         * 4. a trans P (term4), and receive client, index [1,2,4], then copy to all, prelog_term is 2,prelog_index is 1,
-                         * so for b and c, index 1 's term is 3, but remote prelog_term is 2, is completely ok.
-                         */
+                    } else { // if (last_index >= prelog_index)  注意> 和 = 的情况是一样的，（至少目前我是这么认为的）
+                        int term_of_local_entry_with_prelog_index = entries_.get(prelog_index).term();
+                        if (term_of_local_entry_with_prelog_index == prelog_term) {
+                            entries_.insert(prelog_index + 1, entry);
+                            // we choose the smaller one to be the commit index, the logic is in entries_.update_commit_index function
+                            entries_.update_commit_index(commit_index, prelog_index);
+                            make_resp_ae(true, "成功insert", server, rpc_lsn);
+                            return;
+                        } else if (term_of_local_entry_with_prelog_index < prelog_term) {
+                            // easy to make an example
+                            make_resp_ae(false, "react2ae, term is ok, but follower's entry's term" + to_string(term_of_local_entry_with_prelog_index) + "of prelog_index " + to_string(prelog_index) + "is SMALLER than rpc's prelog_term" + to_string(prelog_term), server, rpc_lsn);
+                            return;
+                        } else {
+                            make_resp_ae(false, "react2ae, term is ok, but follower's entry's term" + to_string(term_of_local_entry_with_prelog_index) + "of prelog_index " + to_string(prelog_index) + "is BIGGER than rpc's prelog_term" + to_string(prelog_term), server, rpc_lsn);
+                            return;
+                            /*
+                             * 1. 5 nodes with term 1, index [2]
+                             * 2. a trans P (term2), index[1 2], but copy to none
+                             * 3. b trans P (term3), index[1,3], copy to c
+                             * 4. a trans P (term4), and receive client, index [1,2,4], then copy to all, prelog_term is 2,prelog_index is 1,
+                             * so for b and c, index 1 's term is 3, but remote prelog_term is 2, is completely ok.
+                             */
+                        }
                     }
                 }
+            } else {
+                throw logic_error("rpc_ae's entry size is bigger 1");
             }
-
         }
     }
 
@@ -284,7 +299,7 @@ private:
         int remote_term = rpc_rv.term();
         int rpc_lsn = rpc_rv.lsn();
         int remote_latest_term = rpc_rv.latest_term();
-        int remote_latest_index = rpc_rv.lastest_index();
+        int remote_latest_index = rpc_rv.latest_index();
 
         if (term_ > remote_term) {
             make_resp_rv(false, "react2rv: term_ > remote,  write back false", server, rpc_lsn);
@@ -301,7 +316,7 @@ private:
                 if (entries_.size() == 0) { //只管投票
                     should_vote = true;
                 } else {
-                    rpc_Entry &lastEntry = entries_.last_entry();
+                    rpc_Entry &lastEntry = entries_.get(entries_.size()-1);
                     if (lastEntry.term() > remote_term) {
                         should_vote = false;
                     } else if (lastEntry.term() < remote_term) {
@@ -324,12 +339,10 @@ private:
                 make_resp_rv(false, "react2rv: No votes left this term", server, rpc_lsn);
             }
         }
-        return;
-
     }
 
 
-    void react2resp_ae(tuple<string, int> server, Resp_AppendEntryRpc &resp_ae) {
+    void react2resp_ae(const tuple<string, int> &server, Resp_AppendEntryRpc &resp_ae) {
         int remote_term = resp_ae.term();
         if (term_ < remote_term) {
             trans2F(remote_term);
@@ -339,7 +352,7 @@ private:
             if (state_ == primary) {
                 primary_deal_resp_ae_with_same_term(server, resp_ae);
             } else {
-                throw "不可能的情况，主ae，收到resp_ae的remote_term与term_相等，但是state不为主，说明一个term出现了两个主，错误";
+                throw std::logic_error("不可能的情况，主ae，收到resp_ae的remote_term与term_相等，但是state不为主，说明一个term出现了两个主，错误");
             }
         }
     }
@@ -467,6 +480,7 @@ private:
 
     void deal_with_write_error(boost::system::error_code &ec, std::size_t) {
         //todo consider what to do when write failed, (maybe not nothing, because a write failed may means network unreachable, let the retry mechanism to deal with it)
+        BOOST_LOG_TRIVIAL(error) << "write error" << ec.message();
     }
 
 private:
