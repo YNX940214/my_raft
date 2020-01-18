@@ -53,7 +53,9 @@ public:
                 {"locahost", 7777},
                 {"locahost", 9999},
         };
+        majority_ = 3;
         needed_votes_ = 2;
+        N_ = 5;
     }
 
     void run() {
@@ -255,7 +257,7 @@ private:
                 if (prelog_term == -1) { //see AE, we set prelog_term to -1 as this is the index0 log of primary, the follower has to accept it
                     entries_.insert(0, entry);
                     // we choose the smaller one to be the commit index, the logic is in entries_.update_commit_index function
-                    entries_.update_commit_index(commit_index, prelog_index);
+                    follower_update_commit_index(commit_index, prelog_index);
                     make_resp_ae(true, "成功insert", server, rpc_lsn);
                     return;
                 } else {
@@ -268,7 +270,7 @@ private:
                         if (term_of_local_entry_with_prelog_index == prelog_term) {
                             entries_.insert(prelog_index + 1, entry);
                             // we choose the smaller one to be the commit index, the logic is in entries_.update_commit_index function
-                            entries_.update_commit_index(commit_index, prelog_index);
+                            follower_update_commit_index(commit_index, prelog_index);
                             make_resp_ae(true, "成功insert", server, rpc_lsn);
                             return;
                         } else if (term_of_local_entry_with_prelog_index < prelog_term) {
@@ -316,7 +318,7 @@ private:
                 if (entries_.size() == 0) { //只管投票
                     should_vote = true;
                 } else {
-                    rpc_Entry &lastEntry = entries_.get(entries_.size()-1);
+                    rpc_Entry &lastEntry = entries_.get(entries_.size() - 1);
                     if (lastEntry.term() > remote_term) {
                         should_vote = false;
                     } else if (lastEntry.term() < remote_term) {
@@ -340,7 +342,6 @@ private:
             }
         }
     }
-
 
     void react2resp_ae(const tuple<string, int> &server, Resp_AppendEntryRpc &resp_ae) {
         int remote_term = resp_ae.term();
@@ -419,15 +420,21 @@ private: //helper functions, react2rv and react2ae is very simple in some situat
                 } else {
                     nextIndex_[server] = last_send_index + 1;
                 }
+
+
                 // whether send next entry immediately is determined by primary_deal_resp_ae, but whether to build an empty ae is determinde by AE()
-                if (last_send_index >= entries_.size()) {
-                    // notice > and ==, we don't send next index immediately
-                    //do nothing, let the timers expires and send empty rps_ae as heartbeat, that situation 2 in AE()
+                if (last_send_index > entries_.size()) {
+                    // > , we don't send next index immediately, let the timers expires and send empty rps_ae as heartbeat, that situation 2 in AE()
                 } else {
-                    //cancel timer todo check hook num
-                    retry_timers_[server].cancel();
-                    // immediately the next AE
-                    AE(server);
+                    primary_update_commit_index(server, last_send_index);
+                    if (last_send_index == entries_.size()) {
+                        // = , we don't send next index immediately, let the timers expires and send empty rps_ae as heartbeat, that situation 2 in AE()
+                    } else {
+                        //cancel timer todo check hook num
+                        retry_timers_[server].cancel();
+                        // immediately the next AE
+                        AE(server);
+                    }
                 }
             } else {
                 /* ok == false, but there may be many possibilities, like remote server encouter disk error, what should it do(one way is just crash, no response, so primary will not push back the index to send)
@@ -474,6 +481,31 @@ private: //helper functions, react2rv and react2ae is very simple in some situat
     }
 
 private:
+    inline void primary_update_commit_index(const tuple<string, int> &server, int index) {
+        Follower_saved_index[server] = index;
+        // this can be done by find the k
+        vector<int> temp_sort(configuration_.size(), 0);
+        int i = 0;
+        for (const auto &ele:Follower_saved_index) {
+            temp_sort[i] = ele.second;
+        }
+        std::reverse(temp_sort.begin(), temp_sort.end());
+        commit_index_ = temp_sort[majority_];
+    }
+
+    inline void follower_update_commit_index(unsigned remote_commit_index, unsigned remote_prelog_index) {
+        int smaller_index = smaller(remote_commit_index, remote_prelog_index);
+        if (smaller_index > commit_index_) {
+            commit_index_ = smaller_index;
+        } else if (smaller_index == commit_index_) {
+
+        } else {
+            string err = "remote_commit_index " + std::to_string(smaller_index) + " is smaller than local commit_index " + std::to_string(commit_index_) + ", this is impossible";
+            BOOST_LOG_TRIVIAL(error) << err;
+        }
+
+    }
+
     void writeTo(tuple<string, int> server, string msg) {
         network_.writeTo(server, msg, std::bind(&instance::deal_with_write_error, this, std::placeholders::_1, std::placeholders::_2));
     }
@@ -494,7 +526,8 @@ private:
     State state_;
     io_context &ioContext;
     vector<std::tuple<string, int>> configuration_;
-
+    int majority_;
+    int N_;
     //rpc
     string ip_;
     int port_;
@@ -506,6 +539,7 @@ private:
     map<std::tuple<string, int>, deadline_timer> retry_timers_;
 
     // log & state machine
+    int commit_index_;
     Entries entries_;
     map<tuple<string, int>, int> nextIndex_;
     map<tuple<string, int>, int> Follower_saved_index;
