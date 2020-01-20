@@ -5,7 +5,7 @@
 #ifndef RAFT_STATEMACHINE_H
 #define RAFT_STATEMACHINE_H
 
-#include "entry.h"
+#include "entry/entry.h"
 
 class StateMachine {
 public:

@@ -6,6 +6,9 @@
 #define RAFT_UTIL_H
 
 #include <iostream>
+#include <string>
+
+using std::string;
 
 int random_candidate_expire() {
     int max = 300;
@@ -38,6 +41,15 @@ unsigned smaller(unsigned a, unsigned b) {
         return a;
     } else {
         return b;
+    }
+}
+
+bool file_exists(const string &path) {
+    FILE *fp = fopen(path.c_str(), "r");
+    if (fp) {
+        return true;
+    } else {
+        return false;
     }
 }
 

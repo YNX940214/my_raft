@@ -4,6 +4,7 @@ project(raft)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_FLAGS " -DBOOST_LOG_DYN_LINK")
 
+
 set(BOOST_ROOT /Users/ynx/boost/build)
 include(FindProtobuf)
 find_package(protobuf REQUIRED)
@@ -17,17 +18,58 @@ find_package(Boost COMPONENTS log log_setup REQUIED)
 include_directories(${Boost_INCLUDE_DIRS})
 
 
-#Code Generation
 if (protobuf_MODULE_COMPATIBLE) #Legacy Support
     protobuf_generate_cpp(main_PROTO_SRCS main_PROTO_HDRS rpc.proto)
     list(APPEND main_SRCS ${main_PROTO_SRCS} ${main_PROTO_HDRS})
 endif ()
-add_executable(raft main.cpp log/boost_lop.cpp rpc/rpc.cpp rpc.proto entry.cpp entry.h StateMachine.cpp StateMachine.h const.h)
 
+
+add_executable(raft main.cpp
+        log/boost_lop.cpp
+#        rpc/rpc.cpp
+#        rpc.proto
+#        entry/entry.cpp
+#        entry/entry.h
+#        StateMachine.cpp
+#        StateMachine.h
+        const.h
+#        entry/data.cpp
+#        entry/data.h
+        )
 if (protobuf_MODULE_COMPATIBLE) #Legacy mode
     target_include_directories(raft PUBLIC ${PROTOBUF_INCLUDE_DIRS})
     target_link_libraries(raft ${PROTOBUF_LIBRARIES})
 else ()
-    target_link_libraries(raft protobuf::libprotobuf ${Boost_LOG_LIBRARY} ${Boost_LOG_SETUP_LIBRARY} ${Boost_FILE_SYSTEM_LIBRARY} ${Boost_THREAD_LIBRARY} ${Boost_SYSTEM_LIBRARY})
+    target_link_libraries(raft
+            protobuf::libprotobuf
+            ${Boost_LOG_LIBRARY}
+            ${Boost_LOG_SETUP_LIBRARY}
+            ${Boost_FILE_SYSTEM_LIBRARY}
+            ${Boost_THREAD_LIBRARY}
+            ${Boost_SYSTEM_LIBRARY})
     protobuf_generate(TARGET raft)
 endif ()
+
+
+#add_executable(test_entry
+#        entry/entry.cpp
+#        entry/entry.h
+#        entry/data.cpp
+#        entry/data.h)
+#if (protobuf_MODULE_COMPATIBLE) #Legacy mode
+#    target_include_directories(test_entry PUBLIC ${PROTOBUF_INCLUDE_DIRS})
+#    target_link_libraries(test_entry ${PROTOBUF_LIBRARIES})
+#else ()
+#    target_link_libraries(test_entry
+#            protobuf::libprotobuf
+#            ${Boost_LOG_LIBRARY}
+#            ${Boost_LOG_SETUP_LIBRARY}
+#            ${Boost_FILE_SYSTEM_LIBRARY}
+#            ${Boost_THREAD_LIBRARY}
+#            ${Boost_SYSTEM_LIBRARY})
+#    protobuf_generate(TARGET test_entry)
+#endif ()
+
+
+#add_executable(test test.cpp)
+#add_executable(test_entry entry/entry.cpp)

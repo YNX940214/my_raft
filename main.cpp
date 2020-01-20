@@ -7,7 +7,7 @@
 #include "log/boost_lop.h"
 #include "rpc/rpc.h"
 #include "rpc.pb.h"
-#include "entry.h"
+#include "entry/entry.h"
 #include "const.h"
 
 using namespace boost::asio;
