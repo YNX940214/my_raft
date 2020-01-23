@@ -36,13 +36,16 @@ public:
             already_voted_(false),
             candidate_timer_(loop),
             network_(loop, std::bind(&instance::reactToIncomingMsg, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3)),
-            state_machine_(),
+//            state_machine_(),
             winned_votes_(0) {
         load_config_from_file();
         for (const auto &server_tuple: configuration_) {
             nextIndex_[server_tuple] = -1; // -1 not 0, because at the beginning, entries[0] raise Exception,
             Follower_saved_index[server_tuple] = 0;
             current_rpc_lsn_[server_tuple] = 0;
+            deadline_timer timer(loop);
+            auto sp = make_shared<deadline_timer>(std::move(timer));
+            retry_timers_.insert({server_tuple, sp});
         }
     }
 
@@ -127,7 +130,7 @@ private:
         rpc.set_lsn(server_current_rpc_lsn);
         rpc.set_term(term_);
         int index_to_send = nextIndex_[server];
-        rpc.set_commit_index(entries_.get_commit_index());
+        rpc.set_commit_index(commit_index_);
         if (index_to_send > 0) {
             rpc_Entry prev_entry = entries_.get(index_to_send - 1);
             rpc.set_prelog_term(prev_entry.term());
@@ -153,12 +156,12 @@ private:
     void AE(const tuple<string, int> &server) {
         string ae_rpc_str = build_rpc_ae_string(server);
         writeTo(server, ae_rpc_str);   //考虑如下场景，发了AE1,index为100,然后定时器到期重发了AE2,index为100，这时候收到ae1的resp为false，将index--,如果ae2到F，又触发了一次resp，这两个rpc的请求一样，resp一样，但是P收到两个一样的resp会将index--两次
-        deadline_timer &t1 = retry_timers_[server];
-        int waiting_counts = t1.expires_from_now(boost::posix_time::seconds(random_ae_retry_expire()));
+        shared_ptr<deadline_timer> t1 = retry_timers_[server];
+        int waiting_counts = t1->expires_from_now(boost::posix_time::seconds(random_ae_retry_expire()));
         if (waiting_counts != 0) {
             throw std::logic_error("should be zero, a timer can't be interrupt by network, but when AE is called, there should be no hooks on the timer");
         } else {
-            t1.async_wait([this, server](const boost::system::error_code &error) {
+            t1->async_wait([this, server](const boost::system::error_code &error) {
                 if (error == boost::asio::error::operation_aborted) {
                     //do nothing, maybe log
                 } else {
@@ -188,12 +191,12 @@ private:
     void RV(const tuple<string, int> &server) {
         string rv_rpc_str = build_rpc_rv_string(server);
         writeTo(server, rv_rpc_str);
-        deadline_timer &timer = retry_timers_[server];
-        int waiting_counts = timer.expires_from_now(boost::posix_time::seconds(random_rv_retry_expire()));
+        shared_ptr<deadline_timer> timer = retry_timers_[server];
+        int waiting_counts = timer->expires_from_now(boost::posix_time::seconds(random_rv_retry_expire()));
         if (waiting_counts != 0) {
             throw std::logic_error("should be zero, a timer can't be interrupt by network, but when AE is called, there should be no hooks on the timer");
         } else {
-            timer.async_wait([this, server](const boost::system::error_code &error) {
+            timer->async_wait([this, server](const boost::system::error_code &error) {
                 if (error == boost::asio::error::operation_aborted) {
                     //do nothing, maybe log
                 } else {
@@ -318,7 +321,7 @@ private:
                 if (entries_.size() == 0) { //只管投票
                     should_vote = true;
                 } else {
-                    rpc_Entry &lastEntry = entries_.get(entries_.size() - 1);
+                    const rpc_Entry &lastEntry = entries_.get(entries_.size() - 1);
                     if (lastEntry.term() > remote_term) {
                         should_vote = false;
                     } else if (lastEntry.term() < remote_term) {
@@ -431,7 +434,7 @@ private: //helper functions, react2rv and react2ae is very simple in some situat
                         // = , we don't send next index immediately, let the timers expires and send empty rps_ae as heartbeat, that situation 2 in AE()
                     } else {
                         //cancel timer todo check hook num
-                        retry_timers_[server].cancel();
+                        retry_timers_[server]->cancel();
                         // immediately the next AE
                         AE(server);
                     }
@@ -449,7 +452,7 @@ private: //helper functions, react2rv and react2ae is very simple in some situat
                 if (last_send_index <= 0) {
                     // do nothing, let the timers expires
                 } else {
-                    retry_timers_[server].cancel();
+                    retry_timers_[server]->cancel();
                     AE(server);
                 }
 
@@ -471,8 +474,8 @@ private: //helper functions, react2rv and react2ae is very simple in some situat
                     trans2P();
                 } else {
                     // cancel the timer, if receive votes, we no longer need to rv more this term
-                    deadline_timer &timer = retry_timers_[server];
-                    timer.cancel();
+                    shared_ptr<deadline_timer> timer = retry_timers_[server];
+                    timer->cancel();
                 }
             } else {
                 // this mean remote follower has already voted for other candidate with the same term, just do nothing and let candidate_timer expires to enter the next term candidate
@@ -536,7 +539,7 @@ private:
 
     //timers
     deadline_timer candidate_timer_;
-    map<std::tuple<string, int>, deadline_timer> retry_timers_;
+    map<std::tuple<string, int>, shared_ptr<deadline_timer> > retry_timers_;
 
     // log & state machine
     int commit_index_;
@@ -544,7 +547,7 @@ private:
     map<tuple<string, int>, int> nextIndex_;
     map<tuple<string, int>, int> Follower_saved_index;
     // commitIndex 需要持久化，在entries里
-    StateMachine state_machine_;
+//    StateMachine state_machine_; todo
 };
 
 int main() {

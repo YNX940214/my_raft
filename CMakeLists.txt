@@ -24,44 +24,23 @@ if (protobuf_MODULE_COMPATIBLE) #Legacy Support
 endif ()
 
 
-#add_executable(raft main.cpp
-#        log/boost_lop.cpp
-##        rpc/rpc.cpp
-#        rpc.proto
-##        entry/entry.cpp
-##        entry/entry.h
-##        StateMachine.cpp
-##        StateMachine.h
-#        const.h
-##        entry/data.cpp
-##        entry/data.h
-#        )
-#if (protobuf_MODULE_COMPATIBLE) #Legacy mode
-#    target_include_directories(raft PUBLIC ${PROTOBUF_INCLUDE_DIRS})
-#    target_link_libraries(raft ${PROTOBUF_LIBRARIES})
-#else ()
-#    target_link_libraries(raft
-#            protobuf::libprotobuf
-#            ${Boost_LOG_LIBRARY}
-#            ${Boost_LOG_SETUP_LIBRARY}
-#            ${Boost_FILE_SYSTEM_LIBRARY}
-#            ${Boost_THREAD_LIBRARY}
-#            ${Boost_SYSTEM_LIBRARY})
-#    protobuf_generate(TARGET raft)
-#endif ()
-
-
-add_executable(test_entry
+add_executable(raft main.cpp
+        log/boost_lop.cpp
+        rpc/rpc.cpp
         rpc.proto
         entry/entry.cpp
         entry/entry.h
+#        StateMachine.cpp
+#        StateMachine.h
+        const.h
         entry/data.cpp
-        entry/data.h)
-#if (protobuf_MODULE_COMPATIBLE) #Legacy mode
-#    target_include_directories(test_entry PUBLIC ${PROTOBUF_INCLUDE_DIRS})
-#    target_link_libraries(test_entry ${PROTOBUF_LIBRARIES})
-#else ()
-    target_link_libraries(test_entry
+        entry/data.h
+        )
+if (protobuf_MODULE_COMPATIBLE) #Legacy mode
+    target_include_directories(raft PUBLIC ${PROTOBUF_INCLUDE_DIRS})
+    target_link_libraries(raft ${PROTOBUF_LIBRARIES})
+else ()
+    target_link_libraries(raft
             protobuf::libprotobuf
             ${Boost_LOG_LIBRARY}
             ${Boost_LOG_SETUP_LIBRARY}
@@ -69,10 +48,28 @@ add_executable(test_entry
             ${Boost_WSERIALIZATION_LIBRARY}
             ${Boost_FILE_SYSTEM_LIBRARY}
             ${Boost_THREAD_LIBRARY}
-            ${Boost_SYSTEM_LIBRARY}
-            )
-    protobuf_generate(TARGET test_entry)
-#endif ()
+            ${Boost_SYSTEM_LIBRARY})
+    protobuf_generate(TARGET raft)
+endif ()
+
+
+#add_executable(test_entry
+#        rpc.proto
+#        entry/entry.cpp
+#        entry/entry.h
+#        entry/data.cpp
+#        entry/data.h)
+#target_link_libraries(test_entry
+#        protobuf::libprotobuf
+#        ${Boost_LOG_LIBRARY}
+#        ${Boost_LOG_SETUP_LIBRARY}
+#        ${Boost_SERIALIZATION_LIBRARY}
+#        ${Boost_WSERIALIZATION_LIBRARY}
+#        ${Boost_FILE_SYSTEM_LIBRARY}
+#        ${Boost_THREAD_LIBRARY}
+#        ${Boost_SYSTEM_LIBRARY}
+#        )
+#protobuf_generate(TARGET test_entry)
 
 
 #add_executable(test_boost_archive tests/boost_archive.cpp)

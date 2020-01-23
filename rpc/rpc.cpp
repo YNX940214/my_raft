@@ -17,16 +17,22 @@ void RPC::writeTo(std::tuple<string, int> server, string rpc_msg, std::function<
         int port = std::get<1>(server);
         //如果网络不可达到，tcp建立链接不能成功
         getConnection(ip, port, cb);
-    } catch () { //catch boost tcp connection failed
-
+//    } catch () { //catch boost tcp connection failed
+//
     } catch (std::exception &exception) {
-        BOOST_LOG_TRIVIAL(error) << "unconsidered exception: " + exception.what();
+        BOOST_LOG_TRIVIAL(error) << "unconsidered exception: " << exception.what();
     }
+}
+
+void RPC::getConnection(std::string ip, int port, std::function<void(boost::system::error_code &ec, std::size_t)> cb) {
+
 }
 
 //思考了一下，accept并不需要将新链接放入连接池，因为实现起来有困难。
 void RPC::startAccept() {
-    _acceptor.async_accept(std::bind(&RPC::accept_callback, this, std::placeholders::_1, std::placeholders::_2));
+    _acceptor.async_accept([this](const boost::system::error_code &error, tcp::socket peer) {
+        this->accept_callback(error, std::move(peer));
+    });
 }
 
 void RPC::accept_callback(const boost::system::error_code &error, tcp::socket peer) {
@@ -38,8 +44,16 @@ void RPC::accept_callback(const boost::system::error_code &error, tcp::socket pe
     startAccept();
 }
 
+//todo 这种形式居然不能用，不跟它死磕了，用lambda
+//void RPC::read_header(tcp::socket peer) {
+////    boost::asio::async_read(peer, boost::asio::buffer(meta_char, 4), std::bind(&RPC::read_body, this, std::move(peer), std::placeholders::_1, std::placeholders::_2));
+////}
+
 void RPC::read_header(tcp::socket peer) {
-    boost::asio::async_read(peer, boost::asio::buffer(meta_char, 4), std::bind(&RPC::read_body, this, std::move(peer), std::placeholders::_1, std::placeholders::_2));
+    boost::asio::async_read(peer, boost::asio::buffer(meta_char, 4), [this, &peer](const boost::system::error_code &error, size_t bytes_transferred) {
+        this->read_body(std::move(peer), error, bytes_transferred);
+
+    });
 }
 
 void RPC::read_body(tcp::socket peer, const boost::system::error_code &error, size_t bytes_transferred) {
@@ -54,7 +68,9 @@ void RPC::read_body(tcp::socket peer, const boost::system::error_code &error, si
         memcpy(char_msg_len, meta_char, 4);
         int msg_len = atoi(char_msg_len);
         //这里有个问题，我已经把socket move给了body_callback，还怎么再move 给read_head？所以我应该拿出信息，传给body_callback？
-        boost::asio::async_read(peer, boost::asio::buffer(big_char, msg_len), std::bind(&RPC::body_callback, this, std::move(peer), std::placeholders::_1, std::placeholders::_2));
+        boost::asio::async_read(peer, boost::asio::buffer(big_char, msg_len), [this, &peer](const boost::system::error_code &error, size_t bytes_transferred) {
+            this->body_callback(std::move(peer), error, bytes_transferred);
+        });
         read_header(std::move(peer));
     }
 }
