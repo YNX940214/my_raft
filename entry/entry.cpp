@@ -3,7 +3,6 @@
 //
 
 #include "entry.h"
-#include "../util.h"
 #include "../log/boost_lop.h"
 #include <stdexcept>
 #include <sstream>
@@ -13,6 +12,7 @@
 #include <boost/serialization/vector.hpp>
 #include "../consts.h"
 #include "../rpc.pb.h"
+#include <limits.h>
 
 using std::cout, std::cin, std::endl, std::string;
 using std::logic_error;
@@ -79,7 +79,20 @@ void Entries::insert(unsigned int index, const rpc_Entry &entry) {
     write_offset_to_file();
 
     //at last
-    entries_[index] = entry; //we don't release the memory because as if the system is running one day, the entries will grow to that length (without checkpoint)
+    if (index == size_) {
+        if (entries_.size() == index) {
+            entries_.push_back(entry);
+        } else {
+            entries_[index] = entry;
+        }
+    } else if (index < size_) {
+        entries_[index] = entry;//we don't release the memory because as if the system is running one day, the entries will grow to that length (without checkpoint)
+    } else {
+        std::ostringstream oss;
+        oss << "insert error, size_ is " << size_ << ", index is " << index;
+        string s = oss.str();
+        throw logic_error(s);
+    }
     size_ = index + 1;
 }
 
@@ -117,6 +130,7 @@ void Entries::write_offset_to_file() {
 
 int main() {
     Entries _entries;
+    //it it amazing to find cin with so many bugs
     while (1) {
         cout << "i for insert and g for get" << endl;
         char action;
@@ -125,9 +139,17 @@ int main() {
             cout << "index to insert?" << endl;
             int index;
             cin >> index;
+            while (cin.fail()) {
+                cout << "you should enter an interger!\nindex to insert?" << endl;
+                cin.clear();
+                cin.ignore();
+//                    cin.ignore(std::numeric_limits<std::streamsize>::max(), ' '); //quoting https://stackoverflow.com/questions/7413247/cin-clear-doesnt-reset-cin-object
+                cin >> index;
+            }
+            cin.ignore();   //https://stackoverflow.com/questions/17005725/c-cin-weird-behaviour
             cout << "string to insert?" << endl;
             string str;
-            cin >> str;
+            std::getline(cin, str);
             rpc_Entry entry;
             entry.set_term(1);
             entry.set_index(1);
@@ -142,4 +164,5 @@ int main() {
             cout << entry.msg();
         }
     }
+
 }

@@ -6,6 +6,7 @@
 #define RAFT_DATA_H
 
 #include <string>
+#include "../util.h"
 
 using std::string;
 
@@ -13,7 +14,7 @@ class data {
 public:
     data(const string &path);
 
-    void write_from_offset(int offset, const string & data);
+    void write_from_offset(int offset, const string &data);
 
     string read_from_offset(int offset, int len);
 

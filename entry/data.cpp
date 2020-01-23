@@ -10,7 +10,6 @@
 
 #include <iostream>
 
-#include "../util.h"
 
 data::data(const string &path) {
     const char *path_char = path.c_str();
@@ -46,8 +45,8 @@ void data::write_from_offset(int offset, const string &data) {
 }
 
 
-int main() {
-    data file_data("test111.txt");
-    file_data.write_from_offset(0, "0123456789");
-    std::cout << file_data.read_from_offset(1, 3);
-}
+//int main() {
+//    data file_data("test111.txt");
+//    file_data.write_from_offset(0, "0123456789");
+//    std::cout << file_data.read_from_offset(1, 3);
+//}

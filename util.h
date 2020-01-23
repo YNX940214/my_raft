@@ -10,7 +10,7 @@
 
 using std::string;
 
-int random_candidate_expire() {
+inline int random_candidate_expire() {
     int max = 300;
     int min = 200;
     int range = max - min + 1;
@@ -19,7 +19,7 @@ int random_candidate_expire() {
     return num;
 }
 
-int random_rv_retry_expire() {
+inline int random_rv_retry_expire() {
     int max = 300;
     int min = 200;
     int range = max - min + 1;
@@ -28,7 +28,7 @@ int random_rv_retry_expire() {
     return num;
 }
 
-int random_ae_retry_expire() {
+inline int random_ae_retry_expire() {
     int max = 300;
     int min = 200;
     int range = max - min + 1;
@@ -36,7 +36,7 @@ int random_ae_retry_expire() {
     return num;
 }
 
-unsigned smaller(unsigned a, unsigned b) {
+inline unsigned smaller(unsigned a, unsigned b) {
     if (a < b) {
         return a;
     } else {
@@ -44,7 +44,7 @@ unsigned smaller(unsigned a, unsigned b) {
     }
 }
 
-bool file_exists(const string &path) {
+inline bool file_exists(const string &path) {
     FILE *fp = fopen(path.c_str(), "r");
     if (fp) {
         return true;

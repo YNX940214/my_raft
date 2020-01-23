@@ -47,6 +47,11 @@ private:
      *
      */
     vector<unsigned int> offset_; //
+
+    /*
+     * size_ is the num of entries, size_=offset_.size()-1 for offset leave the last
+     * element for the end of file and has a ele of 0 when the entries are empty
+     */
     unsigned int size_;
     string path_offset_;
     //unsigned _commit_index; after some thought, the commit_index will not be saved on disk, just a in memory value( i am not sure this is right)
