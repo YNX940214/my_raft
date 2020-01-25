@@ -5,52 +5,18 @@
 #ifndef RAFT_UTIL_H
 #define RAFT_UTIL_H
 
-#include <iostream>
-#include <string>
 
 using std::string;
 
-inline int random_candidate_expire() {
-    int max = 300;
-    int min = 200;
-    int range = max - min + 1;
-    int num = rand() % range + min;
+int random_candidate_expire();
 
-    return num;
-}
+int random_rv_retry_expire();
 
-inline int random_rv_retry_expire() {
-    int max = 300;
-    int min = 200;
-    int range = max - min + 1;
-    int num = rand() % range + min;
+int random_ae_retry_expire();
 
-    return num;
-}
+unsigned smaller(unsigned a, unsigned b);
 
-inline int random_ae_retry_expire() {
-    int max = 300;
-    int min = 200;
-    int range = max - min + 1;
-    int num = rand() % range + min;
-    return num;
-}
+bool file_exists(const string &path);
 
-inline unsigned smaller(unsigned a, unsigned b) {
-    if (a < b) {
-        return a;
-    } else {
-        return b;
-    }
-}
-
-inline bool file_exists(const string &path) {
-    FILE *fp = fopen(path.c_str(), "r");
-    if (fp) {
-        return true;
-    } else {
-        return false;
-    }
-}
-
+string server2str(const std::tuple<string,int> & server);
 #endif //RAFT_UTIL_H

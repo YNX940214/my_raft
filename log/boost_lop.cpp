@@ -5,12 +5,12 @@ void init_logging() {
 
     logging::add_file_log(
             keywords::file_name = "sample.log",
-            keywords::format = "[%TimeStamp%] [%ThreadID%] [%Severity%] [%ProcessID%] [%LineID%] %Message%"
+            keywords::format = "[%TimeStamp%] [%ThreadID%] [%Severity%] [%LineID%] %Message%"
     );
 
     logging::core::get()->set_filter
             (
-                    logging::trivial::severity >= logging::trivial::debug
+                    logging::trivial::severity >= logging::trivial::trace
             );
 
 

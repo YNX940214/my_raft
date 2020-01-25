@@ -14,7 +14,10 @@
 #include "../rpc.pb.h"
 #include <limits.h>
 
-using std::cout, std::cin, std::endl, std::string;
+using std::cout;
+using std::cin;
+using std::endl;
+using std::string;
 using std::logic_error;
 using std::ifstream;
 using std::ofstream;
@@ -128,41 +131,40 @@ void Entries::write_offset_to_file() {
 }
 
 
-int main() {
-    Entries _entries;
-    //it it amazing to find cin with so many bugs
-    while (1) {
-        cout << "i for insert and g for get" << endl;
-        char action;
-        cin >> action;
-        if (action == 'i') {
-            cout << "index to insert?" << endl;
-            int index;
-            cin >> index;
-            while (cin.fail()) {
-                cout << "you should enter an interger!\nindex to insert?" << endl;
-                cin.clear();
-                cin.ignore();
-//                    cin.ignore(std::numeric_limits<std::streamsize>::max(), ' '); //quoting https://stackoverflow.com/questions/7413247/cin-clear-doesnt-reset-cin-object
-                cin >> index;
-            }
-            cin.ignore();   //https://stackoverflow.com/questions/17005725/c-cin-weird-behaviour
-            cout << "string to insert?" << endl;
-            string str;
-            std::getline(cin, str);
-            rpc_Entry entry;
-            entry.set_term(1);
-            entry.set_index(1);
-            entry.set_msg(str);
-            _entries.insert(index, entry);
-        }
-        if (action == 'g') {
-            cout << "index to get?" << endl;
-            int index;
-            cin >> index;
-            rpc_Entry entry = _entries.get(index);
-            cout << entry.msg();
-        }
-    }
-
-}
+//int main() {
+//    Entries _entries;
+//    //it it amazing to find cin with so many bugs
+//    while (1) {
+//        cout << "i for insert and g for get" << endl;
+//        char action;
+//        cin >> action;
+//        if (action == 'i') {
+//            cout << "index to insert?" << endl;
+//            int index;
+//            cin >> index;
+//            while (cin.fail()) {
+//                cout << "you should enter an interger!\nindex to insert?" << endl;
+//                cin.clear();
+//                cin.ignore();
+////                    cin.ignore(std::numeric_limits<std::streamsize>::max(), ' '); //quoting https://stackoverflow.com/questions/7413247/cin-clear-doesnt-reset-cin-object
+//                cin >> index;
+//            }
+//            cin.ignore();   //https://stackoverflow.com/questions/17005725/c-cin-weird-behaviour
+//            cout << "string to insert?" << endl;
+//            string str;
+//            std::getline(cin, str);
+//            rpc_Entry entry;
+//            entry.set_term(1);
+//            entry.set_index(1);
+//            entry.set_msg(str);
+//            _entries.insert(index, entry);
+//        }
+//        if (action == 'g') {
+//            cout << "index to get?" << endl;
+//            int index;
+//            cin >> index;
+//            rpc_Entry entry = _entries.get(index);
+//            cout << entry.msg();
+//        }
+//    }
+//}

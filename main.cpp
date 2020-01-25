@@ -27,15 +27,16 @@ enum State {
 //4。根据commitIndex把entry apply到state machine的独立线程，注意这个线程只能读commitIndex不能改
 class instance {
 public:
-    instance(io_service &loop, string _ip, int _port) :
+    instance(io_service &loop, const string &_ip, int _port, const tcp::endpoint &_endpoint) :
             ip_(_ip),
             port_(_port),
+            server_(_ip, _port),
             ioContext(loop),
             term_(0),
             state_(follower),
             already_voted_(false),
             candidate_timer_(loop),
-            network_(loop, std::bind(&instance::reactToIncomingMsg, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3)),
+            network_(loop, _endpoint, std::bind(&instance::reactToIncomingMsg, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3)),
 //            state_machine_(),
             winned_votes_(0) {
         load_config_from_file();
@@ -52,9 +53,9 @@ public:
     //mock 一下先
     void load_config_from_file() {
         configuration_ = {
-                {"locahost", 8888},
-                {"locahost", 7777},
-                {"locahost", 9999},
+//                {"127.0.0.1", 8888},
+                {"127.0.0.1", 7777},
+//                {"127.0.0.1", 9999},
         };
         majority_ = 3;
         needed_votes_ = 2;
@@ -63,9 +64,9 @@ public:
 
     void run() {
         network_.startAccept();
-        int waiting_counts = candidate_timer_.expires_from_now(boost::posix_time::seconds(random_candidate_expire()));
-        if (waiting_counts == 0) {
-            throw std::logic_error("初始化阶段这里不可能为0");
+        int waiting_counts = candidate_timer_.expires_from_now(boost::posix_time::milliseconds(random_candidate_expire()));
+        if (waiting_counts != 0) {
+            throw std::logic_error("初始化阶段这里不可能为非0");
         } else {
             candidate_timer_.async_wait([this](const boost::system::error_code &error) {
                 if (error == boost::asio::error::operation_aborted) {
@@ -78,13 +79,21 @@ public:
         ioContext.run();
     }
 
+    void cancel_all_timers() {
+        BOOST_LOG_TRIVIAL(trace) << server2str(server_) << " all timer canceled";
+        candidate_timer_.cancel();
+        for (auto pair : retry_timers_) {
+            pair.second->cancel();
+        }
+    }
+
 private:
     void trans2F(int term) {
         //todo clean election state（从candidate trans过来）
         //todo cancel all the timers
         term_ = term;
         state_ = follower;
-        int waiting_count = candidate_timer_.expires_from_now(boost::posix_time::seconds(random_candidate_expire()));
+        int waiting_count = candidate_timer_.expires_from_now(boost::posix_time::milliseconds(random_candidate_expire()));
         if (waiting_count == 0) {
             throw std::logic_error("trans2F是因为收到了外界rpc切换成follower，所以至少有一个cb_tran2_candidate的定时器，否则就是未考虑的情况");
         }
@@ -106,20 +115,35 @@ private:
     }
 
     void trans2C() {
-        //only F can trans2C, and when transfered to C, the timer must hook nothing, so we don't need to cancel any timer
+        BOOST_LOG_TRIVIAL(error) << server2str(server_) << "trans to candidate";
+        /*
+         * candidate can trans 2 candidate, we need to cancel the timer
+         * 刚跑起来的时候这里有个bug，rv的重传超时设置成了秒，这导致trans2candidate的时候，rv的timer还没有超时，所以再次set timer expire的时候检查hook数目不为0，属于一个被遗漏的bug，但找到后修复了，但是这
+         */
+        cancel_all_timers();
         term_++;
         state_ = candidate;
         winned_votes_ = 1;
         //设置下一个term candidate的定时器
-        int waiting_count = candidate_timer_.expires_from_now(boost::posix_time::seconds(random_candidate_expire()));
+        int waiting_count = candidate_timer_.expires_from_now(boost::posix_time::milliseconds(random_candidate_expire()));
         if (waiting_count == 0) {
             //完全可能出现这种情况，如果是cb_trans2_candidate的定时器自然到期，waiting_count就是0
             //leave behind
         } else {
             throw std::logic_error("trans2C只能是timer_candidate_expire自然到期触发，所以不可能有waiting_count不为0的情况，否则就是未考虑的情况");
         }
+        candidate_timer_.async_wait([this](const boost::system::error_code &error) {
+            if (error == boost::asio::error::operation_aborted) {
+                //啥都不做，让react处理
+            } else {
+                trans2C();
+            }
+        });
         for (auto &server : configuration_) {
-            RV(server);
+            int port = std::get<1>(server);
+            if (port != port_) {
+                RV(server);
+            }
         }
     }
 
@@ -157,7 +181,7 @@ private:
         string ae_rpc_str = build_rpc_ae_string(server);
         writeTo(server, ae_rpc_str);   //考虑如下场景，发了AE1,index为100,然后定时器到期重发了AE2,index为100，这时候收到ae1的resp为false，将index--,如果ae2到F，又触发了一次resp，这两个rpc的请求一样，resp一样，但是P收到两个一样的resp会将index--两次
         shared_ptr<deadline_timer> t1 = retry_timers_[server];
-        int waiting_counts = t1->expires_from_now(boost::posix_time::seconds(random_ae_retry_expire()));
+        int waiting_counts = t1->expires_from_now(boost::posix_time::milliseconds(random_ae_retry_expire()));
         if (waiting_counts != 0) {
             throw std::logic_error("should be zero, a timer can't be interrupt by network, but when AE is called, there should be no hooks on the timer");
         } else {
@@ -189,16 +213,21 @@ private:
     }
 
     void RV(const tuple<string, int> &server) {
-        string rv_rpc_str = build_rpc_rv_string(server);
-        writeTo(server, rv_rpc_str);
+        BOOST_LOG_TRIVIAL(trace) << server2str(server_) << " send rpc_rv to server " << server2str(server);
+//        string rv_rpc_str = build_rpc_rv_string(server); flag
+//        writeTo(server, rv_rpc_str);
         shared_ptr<deadline_timer> timer = retry_timers_[server];
-        int waiting_counts = timer->expires_from_now(boost::posix_time::seconds(random_rv_retry_expire()));
+        int waiting_counts = timer->expires_from_now(boost::posix_time::milliseconds(random_rv_retry_expire()));
         if (waiting_counts != 0) {
-            throw std::logic_error("should be zero, a timer can't be interrupt by network, but when AE is called, there should be no hooks on the timer");
+            std::ostringstream oss;
+            oss << "rv retry timer is set and hooks is not zero, it should be " << server2str(server);
+            string s = oss.str();
+            throw logic_error(s);
         } else {
             timer->async_wait([this, server](const boost::system::error_code &error) {
+                BOOST_LOG_TRIVIAL(trace) << "rv retry_timers expires" << server2str(server);
                 if (error == boost::asio::error::operation_aborted) {
-                    //do nothing, maybe log
+                    BOOST_LOG_TRIVIAL(error) << server2str(server_) << "rv retry callback error: " << error.message();
                 } else {
                     RV(server);
                 }
@@ -532,8 +561,10 @@ private:
     int majority_;
     int N_;
     //rpc
+    tcp::endpoint endpoint_;
     string ip_;
     int port_;
+    std::tuple<string, int> server_;
     map<std::tuple<string, int>, int> current_rpc_lsn_; //if resp_rpc's lsn != current[server]; then just ignore; (send back the index can't not ensuring idempotence; for example we received a resp which wandereding in the network for 100 years)
     RPC network_;
 
@@ -551,12 +582,23 @@ private:
 };
 
 int main() {
-    init_logging();
-    BOOST_LOG_TRIVIAL(trace) << "This is a trace severity message";
-    BOOST_LOG_TRIVIAL(debug) << "This is a debug severity message";
-    BOOST_LOG_TRIVIAL(info) << "This is an informational severity message";
-    BOOST_LOG_TRIVIAL(warning) << "This is a warning severity message";
-    BOOST_LOG_TRIVIAL(error) << "This is an error severity message";
-    BOOST_LOG_TRIVIAL(fatal) << "and this is a fatal severity message";
+    try {
+        init_logging();
+//    BOOST_LOG_TRIVIAL(trace) << "This is a trace severity message";
+//    BOOST_LOG_TRIVIAL(debug) << "This is a debug severity message";
+//    BOOST_LOG_TRIVIAL(info) << "This is an informational severity message";
+//    BOOST_LOG_TRIVIAL(warning) << "This is a warning severity message";
+//    BOOST_LOG_TRIVIAL(error) << "This is an error severity message";
+//    BOOST_LOG_TRIVIAL(fatal) << "and this is a fatal severity message";
+        boost::asio::io_service io;
+        int _port = 8888;
+        tcp::endpoint _endpoint(tcp::v4(), _port);
+        instance raft_instance(io, "127.0.0.1", _port, _endpoint);
+        raft_instance.run();
+
+    } catch (std::exception &exception) {
+        BOOST_LOG_TRIVIAL(error) << " exception: " << exception.what();
+    }
+
     return 0;
 }

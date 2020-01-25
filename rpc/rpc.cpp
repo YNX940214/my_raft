@@ -8,7 +8,7 @@ string __get_ip_from_socket__(tcp::socket &peer) {
     return ip;
 }
 
-RPC::RPC(boost::asio::io_context &io, std::function<void(RPC_TYPE, string, std::tuple<string, int> server)> cb) : _acceptor(io), io(io), cb(cb) {
+RPC::RPC(boost::asio::io_context &io, const tcp::endpoint &endpoint, std::function<void(RPC_TYPE, string, std::tuple<string, int> server)> cb) : io_(io), _acceptor(io, endpoint), cb(cb) {
 }
 
 void RPC::writeTo(std::tuple<string, int> server, string rpc_msg, std::function<void(boost::system::error_code &ec, std::size_t)> cb) {
@@ -16,16 +16,36 @@ void RPC::writeTo(std::tuple<string, int> server, string rpc_msg, std::function<
         string ip = std::get<0>(server);
         int port = std::get<1>(server);
         //如果网络不可达到，tcp建立链接不能成功
-        getConnection(ip, port, cb);
-//    } catch () { //catch boost tcp connection failed
-//
+        auto sp = client_sockets_[server];
+        if (sp) {
+            boost::asio::async_write(*sp, boost::asio::buffer(rpc_msg.c_str(), rpc_msg.size()), [](const boost::system::error_code &error, std::size_t bytes_transferred) {
+                BOOST_LOG_TRIVIAL(error) << "write failed";
+                //write succeed, do nothing
+            });
+        } else {
+//            tcp::resolver resolver(io_);
+//            auto endpoints = resolver.resolve(ip.c_str(), std::to_string(port).c_str());
+            boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::address::from_string(ip), (unsigned short) port);
+            sp = std::make_shared<tcp::socket>(io_);
+            sp->async_connect(endpoint, [rpc_msg, sp, server, this](const boost::system::error_code &error) {
+                if (error) {
+                    BOOST_LOG_TRIVIAL(error) << "async_connect_error";
+                } else {
+                    client_sockets_.insert({server, sp});
+                    boost::asio::async_write(*sp, boost::asio::buffer(rpc_msg.c_str(), rpc_msg.size()), [](const boost::system::error_code &error, std::size_t bytes_transferred) {
+                        BOOST_LOG_TRIVIAL(error) << "write failed";
+                        //write succeed, do nothing
+                    });
+                }
+            });
+        }
     } catch (std::exception &exception) {
         BOOST_LOG_TRIVIAL(error) << "unconsidered exception: " << exception.what();
     }
 }
 
-void RPC::getConnection(std::string ip, int port, std::function<void(boost::system::error_code &ec, std::size_t)> cb) {
-
+tcp::socket RPC::getConnection(std::string ip, int port, std::function<void(boost::system::error_code &ec, std::size_t)> cb) {
+    //make is simple for now, i just wanna compile and build, let's make connection pool later
 }
 
 //思考了一下，accept并不需要将新链接放入连接池，因为实现起来有困难。
