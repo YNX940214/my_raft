@@ -20,16 +20,46 @@ find_package(Boost COMPONENTS log log_setup serialization REQUIED)
 include_directories(${Boost_INCLUDE_DIRS})
 
 
-add_executable(test_boost_timer_bug tests/boost_timer_bug.cpp
+add_executable(raft main.cpp
+        log/boost_lop.cpp
+        rpc/rpc.cpp
+        rpc.proto
+        entry/entry.cpp
+        entry/entry.h
+        #        StateMachine.cpp
+        #        StateMachine.h
+        util.cpp
+        const.h
+        entry/data.cpp
+        entry/data.h
         )
-target_link_libraries(test_boost_timer_bug
-        ${Boost_LOG_LIBRARY}
-        ${Boost_LOG_SETUP_LIBRARY}
-        ${Boost_SERIALIZATION_LIBRARY}
-        ${Boost_WSERIALIZATION_LIBRARY}
-        ${Boost_FILE_SYSTEM_LIBRARY}
-        ${Boost_THREAD_LIBRARY}
-        ${Boost_SYSTEM_LIBRARY})
+if (protobuf_MODULE_COMPATIBLE) #Legacy mode
+    target_include_directories(raft PUBLIC ${PROTOBUF_INCLUDE_DIRS})
+    target_link_libraries(raft ${PROTOBUF_LIBRARIES})
+else ()
+    target_link_libraries(raft
+            protobuf::libprotobuf
+            ${Boost_LOG_LIBRARY}
+            ${Boost_LOG_SETUP_LIBRARY}
+            ${Boost_SERIALIZATION_LIBRARY}
+            ${Boost_WSERIALIZATION_LIBRARY}
+            ${Boost_FILE_SYSTEM_LIBRARY}
+            ${Boost_THREAD_LIBRARY}
+            ${Boost_SYSTEM_LIBRARY})
+    protobuf_generate(TARGET raft)
+endif ()
+
+
+#add_executable(test_boost_timer_bug tests/boost_timer_bug.cpp
+#        )
+#target_link_libraries(test_boost_timer_bug
+#        ${Boost_LOG_LIBRARY}
+#        ${Boost_LOG_SETUP_LIBRARY}
+#        ${Boost_SERIALIZATION_LIBRARY}
+#        ${Boost_WSERIALIZATION_LIBRARY}
+#        ${Boost_FILE_SYSTEM_LIBRARY}
+#        ${Boost_THREAD_LIBRARY}
+#        ${Boost_SYSTEM_LIBRARY})
 
 #add_executable(boost_test_timer tests/boost_test_timer.cpp)
 #target_link_libraries(boost_test_timer
@@ -54,36 +84,6 @@ target_link_libraries(test_boost_timer_bug
 #if (protobuf_MODULE_COMPATIBLE) #Legacy Support
 #    protobuf_generate_cpp(main_PROTO_SRCS main_PROTO_HDRS rpc.proto)
 #    list(APPEND main_SRCS ${main_PROTO_SRCS} ${main_PROTO_HDRS})
-#endif ()
-
-
-#add_executable(raft main.cpp
-#        log/boost_lop.cpp
-#        rpc/rpc.cpp
-#        rpc.proto
-#        entry/entry.cpp
-#        entry/entry.h
-#        #        StateMachine.cpp
-#        #        StateMachine.h
-#        util.cpp
-#        const.h
-#        entry/data.cpp
-#        entry/data.h
-#        )
-#if (protobuf_MODULE_COMPATIBLE) #Legacy mode
-#    target_include_directories(raft PUBLIC ${PROTOBUF_INCLUDE_DIRS})
-#    target_link_libraries(raft ${PROTOBUF_LIBRARIES})
-#else ()
-#    target_link_libraries(raft
-#            protobuf::libprotobuf
-#            ${Boost_LOG_LIBRARY}
-#            ${Boost_LOG_SETUP_LIBRARY}
-#            ${Boost_SERIALIZATION_LIBRARY}
-#            ${Boost_WSERIALIZATION_LIBRARY}
-#            ${Boost_FILE_SYSTEM_LIBRARY}
-#            ${Boost_THREAD_LIBRARY}
-#            ${Boost_SYSTEM_LIBRARY})
-#    protobuf_generate(TARGET raft)
 #endif ()
 
 

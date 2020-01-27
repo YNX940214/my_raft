@@ -18,11 +18,6 @@ enum State {
     follower, candidate, primary
 };
 
-
-//-1。 目前最当务之急的问题是弄清楚如何rpc，我现在是sendback这样操作的（这是最自然的，这个sendback是对触发这个函数的rpc的sendback，如何抽象是个问题）
-//并考虑如下例子中的场景，a 发出vote rpc， b收到，发回， 回到前不久a收到qurom的vote，变身成主，如何用rpc表示。思考sendback除了ok和term是否还要返回别的信息
-//
-//2. entry是个class，操作entry会写入磁盘，是一个对文件的封装
 //3. 先把程序跑起来，做出第一次选举。
 //4。根据commitIndex把entry apply到state machine的独立线程，注意这个线程只能读commitIndex不能改
 class instance {
@@ -53,9 +48,9 @@ public:
     //mock 一下先
     void load_config_from_file() {
         configuration_ = {
-//                {"127.0.0.1", 8888},
+                {"127.0.0.1", 8888},
                 {"127.0.0.1", 7777},
-//                {"127.0.0.1", 9999},
+                {"127.0.0.1", 9999},
         };
         majority_ = 3;
         needed_votes_ = 2;
@@ -80,11 +75,25 @@ public:
     }
 
     void cancel_all_timers() {
-        BOOST_LOG_TRIVIAL(trace) << server2str(server_) << " all timer canceled";
-        candidate_timer_.cancel();
-        for (auto pair : retry_timers_) {
-            pair.second->cancel();
+        BOOST_LOG_TRIVIAL(trace) << "[BEGIN] cancel_all_timers ";
+        int canceled_number = candidate_timer_.cancel();
+        {
+            std::ostringstream oss;
+            oss << canceled_number << " handlers was canceled on the candidate_timer_" << endl;
+            string s = oss.str();
+            BOOST_LOG_TRIVIAL(debug) << s;
         }
+
+        /*
+         * since cancel function can not cancel the handlers that is already expired, see boost_tiemr_bug(2).cpp, we reference
+         *  https://stackoverflow.com/questions/43168199/cancelling-boost-asio-deadline-timer-safely
+         *  to cancel the expired handlers by setting its timer's expire time at a special value,
+         *  and when executed the handlers will check if the special value is set, if set, that means the handler has been canceled.
+         */
+        for (auto pair : retry_timers_) {
+            pair.second->expires_at(boost::posix_time::min_date_time);
+        }
+        BOOST_LOG_TRIVIAL(trace) << "[DONE] cancel_all_timers";
     }
 
 private:
@@ -107,15 +116,18 @@ private:
     }
 
     void trans2P() {
+        BOOST_LOG_TRIVIAL(trace) << "[begin] trans2P";
+
         //todo cancel all timers(maybe, need a deeper think)
         state_ = primary;
         for (const auto &server: configuration_) {
             AE(server);
         }
+        BOOST_LOG_TRIVIAL(trace) << "[done] trans2P";
     }
 
     void trans2C() {
-        BOOST_LOG_TRIVIAL(error) << server2str(server_) << "trans to candidate";
+        BOOST_LOG_TRIVIAL(trace) << "[begin] trans2C";
         /*
          * candidate can trans 2 candidate, we need to cancel the timer
          * 刚跑起来的时候这里有个bug，rv的重传超时设置成了秒，这导致trans2candidate的时候，rv的timer还没有超时，所以再次set timer expire的时候检查hook数目不为0，属于一个被遗漏的bug，但找到后修复了，但是这
@@ -134,7 +146,7 @@ private:
         }
         candidate_timer_.async_wait([this](const boost::system::error_code &error) {
             if (error == boost::asio::error::operation_aborted) {
-                //啥都不做，让react处理
+                //do nothing, leave react to deal with the logic
             } else {
                 trans2C();
             }
@@ -145,6 +157,7 @@ private:
                 RV(server);
             }
         }
+        BOOST_LOG_TRIVIAL(trace) << "[done] trans2C";
     }
 
 private:
@@ -213,26 +226,31 @@ private:
     }
 
     void RV(const tuple<string, int> &server) {
-        BOOST_LOG_TRIVIAL(trace) << server2str(server_) << " send rpc_rv to server " << server2str(server);
-//        string rv_rpc_str = build_rpc_rv_string(server); flag
-//        writeTo(server, rv_rpc_str);
+        BOOST_LOG_TRIVIAL(trace) << "[begin] RV: " << server2str(server);
+        string rv_rpc_str = build_rpc_rv_string(server);
+        writeTo(server, rv_rpc_str);
         shared_ptr<deadline_timer> timer = retry_timers_[server];
+        auto last_expire_time = timer->expires_at();
         int waiting_counts = timer->expires_from_now(boost::posix_time::milliseconds(random_rv_retry_expire()));
+        if (last_expire_time == boost::posix_time::min_date_time) {
+            //canell_all_timers is called, so the retry should be canceled (no longer need to hook retry handler), just return
+            BOOST_LOG_TRIVIAL(trace) << "RV handler is canceled by setting its timer's expiring time to min_date_time";
+            return;
+        }
+
         if (waiting_counts != 0) {
-            std::ostringstream oss;
-            oss << "rv retry timer is set and hooks is not zero, it should be " << server2str(server);
-            string s = oss.str();
-            throw logic_error(s);
+            throw logic_error("if the cancel_all_timers has already canceled the RV retry, the exe stream will not come to here, as it comes here, there is something wrong");
         } else {
             timer->async_wait([this, server](const boost::system::error_code &error) {
-                BOOST_LOG_TRIVIAL(trace) << "rv retry_timers expires" << server2str(server);
+                BOOST_LOG_TRIVIAL(trace) << "[begin] RV timer expired handler: " << server2str(server) << ", error: " << error.message();
                 if (error == boost::asio::error::operation_aborted) {
-                    BOOST_LOG_TRIVIAL(error) << server2str(server_) << "rv retry callback error: " << error.message();
+                    throw logic_error("其实我们不会运行到这里了，因为已经通过 set timer的方式设置定时器超时");
                 } else {
                     RV(server);
                 }
             });
         }
+        BOOST_LOG_TRIVIAL(trace) << "[done] RV: " << server2str(server);
     }
 
 private:
@@ -577,28 +595,19 @@ private:
     Entries entries_;
     map<tuple<string, int>, int> nextIndex_;
     map<tuple<string, int>, int> Follower_saved_index;
-    // commitIndex 需要持久化，在entries里
 //    StateMachine state_machine_; todo
 };
 
-int main() {
+int main(int argc, char **argv) {
     try {
         init_logging();
-//    BOOST_LOG_TRIVIAL(trace) << "This is a trace severity message";
-//    BOOST_LOG_TRIVIAL(debug) << "This is a debug severity message";
-//    BOOST_LOG_TRIVIAL(info) << "This is an informational severity message";
-//    BOOST_LOG_TRIVIAL(warning) << "This is a warning severity message";
-//    BOOST_LOG_TRIVIAL(error) << "This is an error severity message";
-//    BOOST_LOG_TRIVIAL(fatal) << "and this is a fatal severity message";
         boost::asio::io_service io;
-        int _port = 8888;
+        int _port = atoi(argv[1]);
         tcp::endpoint _endpoint(tcp::v4(), _port);
         instance raft_instance(io, "127.0.0.1", _port, _endpoint);
         raft_instance.run();
-
     } catch (std::exception &exception) {
         BOOST_LOG_TRIVIAL(error) << " exception: " << exception.what();
     }
-
     return 0;
 }

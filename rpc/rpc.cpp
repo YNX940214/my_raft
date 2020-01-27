@@ -27,6 +27,7 @@ void RPC::writeTo(std::tuple<string, int> server, string rpc_msg, std::function<
 //            auto endpoints = resolver.resolve(ip.c_str(), std::to_string(port).c_str());
             boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::address::from_string(ip), (unsigned short) port);
             sp = std::make_shared<tcp::socket>(io_);
+//           todo client_sockets_.insert(sp);
             sp->async_connect(endpoint, [rpc_msg, sp, server, this](const boost::system::error_code &error) {
                 if (error) {
                     BOOST_LOG_TRIVIAL(error) << "async_connect_error";
