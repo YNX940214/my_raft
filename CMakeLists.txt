@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_FLAGS " -DBOOST_LOG_DYN_LINK")
 
 
+add_compile_options(-fno-elide-constructors)
+
 set(BOOST_ROOT /Users/ynx/boost/build)
 include(FindProtobuf)
 find_package(protobuf REQUIRED)
@@ -18,10 +20,41 @@ find_package(Boost COMPONENTS log log_setup serialization REQUIED)
 include_directories(${Boost_INCLUDE_DIRS})
 
 
-if (protobuf_MODULE_COMPATIBLE) #Legacy Support
-    protobuf_generate_cpp(main_PROTO_SRCS main_PROTO_HDRS rpc.proto)
-    list(APPEND main_SRCS ${main_PROTO_SRCS} ${main_PROTO_HDRS})
-endif ()
+add_executable(test_boost_timer_bug tests/boost_timer_bug.cpp
+        )
+target_link_libraries(test_boost_timer_bug
+        ${Boost_LOG_LIBRARY}
+        ${Boost_LOG_SETUP_LIBRARY}
+        ${Boost_SERIALIZATION_LIBRARY}
+        ${Boost_WSERIALIZATION_LIBRARY}
+        ${Boost_FILE_SYSTEM_LIBRARY}
+        ${Boost_THREAD_LIBRARY}
+        ${Boost_SYSTEM_LIBRARY})
+
+#add_executable(boost_test_timer tests/boost_test_timer.cpp)
+#target_link_libraries(boost_test_timer
+#        ${Boost_LOG_LIBRARY}
+#        ${Boost_LOG_SETUP_LIBRARY}
+#        ${Boost_SERIALIZATION_LIBRARY}
+#        ${Boost_WSERIALIZATION_LIBRARY}
+#        ${Boost_FILE_SYSTEM_LIBRARY}
+#        ${Boost_THREAD_LIBRARY}
+#        ${Boost_SYSTEM_LIBRARY})
+
+#add_executable(boost_timer_bug2 tests/boost_timer_bug2.cpp)
+#target_link_libraries(boost_timer_bug2
+#        ${Boost_LOG_LIBRARY}
+#        ${Boost_LOG_SETUP_LIBRARY}
+#        ${Boost_SERIALIZATION_LIBRARY}
+#        ${Boost_WSERIALIZATION_LIBRARY}
+#        ${Boost_FILE_SYSTEM_LIBRARY}
+#        ${Boost_THREAD_LIBRARY}
+#        ${Boost_SYSTEM_LIBRARY})
+
+#if (protobuf_MODULE_COMPATIBLE) #Legacy Support
+#    protobuf_generate_cpp(main_PROTO_SRCS main_PROTO_HDRS rpc.proto)
+#    list(APPEND main_SRCS ${main_PROTO_SRCS} ${main_PROTO_HDRS})
+#endif ()
 
 
 #add_executable(raft main.cpp
@@ -53,7 +86,16 @@ endif ()
 #    protobuf_generate(TARGET raft)
 #endif ()
 
-add_executable(test_boost_bug tests/boost_timer_bug.cpp log/boost_lop.cpp)
+
+#add_executable(test_boost_dispatch_vs_post tests/boost_dispatch_vs_post.cpp)
+#target_link_libraries(test_boost_dispatch_vs_post
+#        ${Boost_LOG_LIBRARY}
+#        ${Boost_LOG_SETUP_LIBRARY}
+#        ${Boost_SERIALIZATION_LIBRARY}
+#        ${Boost_WSERIALIZATION_LIBRARY}
+#        ${Boost_FILE_SYSTEM_LIBRARY}
+#        ${Boost_THREAD_LIBRARY}
+#        ${Boost_SYSTEM_LIBRARY})
 
 #add_executable(test_entry
 #        rpc.proto
