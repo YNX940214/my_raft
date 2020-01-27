@@ -9,4 +9,4 @@ namespace logging = boost::log;
 namespace keywords = boost::log::keywords;
 namespace attrs = boost::log::attributes;
 
-void init_logging();
+void init_logging(int port);

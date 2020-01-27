@@ -20,7 +20,7 @@ find_package(Boost COMPONENTS log log_setup serialization REQUIED)
 include_directories(${Boost_INCLUDE_DIRS})
 
 
-add_executable(raft main.cpp
+add_executable(raft raft.cpp
         log/boost_lop.cpp
         rpc/rpc.cpp
         rpc.proto
@@ -29,7 +29,6 @@ add_executable(raft main.cpp
         #        StateMachine.cpp
         #        StateMachine.h
         util.cpp
-        const.h
         entry/data.cpp
         entry/data.h
         )
