@@ -25,13 +25,15 @@ private:
 
     tcp::socket getConnection(std::string ip, int port, std::function<void(boost::system::error_code &ec, std::size_t)> cb); //异步的获取connection，需要传入回调
 
-    void accept_callback(const boost::system::error_code &error, tcp::socket peer);
+    void accept_callback(const boost::system::error_code &error, std::shared_ptr<tcp::socket> peer);
 
-    void read_header(tcp::socket peer);
+    void read_header(std::shared_ptr<tcp::socket> peer);
 
-    void read_body(tcp::socket peer, const boost::system::error_code &error, size_t bytes_transferred);
+    void read_body(std::shared_ptr<tcp::socket> peer, const boost::system::error_code &error, size_t msg_len);
 
-    void body_callback(tcp::socket peer, const boost::system::error_code &error, size_t bytes_transferred);
+    void body_callback(std::shared_ptr<tcp::socket> peer, const boost::system::error_code &error, size_t bytes_transferred);
+
+    void add_header_then_write_and_hook(std::shared_ptr<tcp::socket> sp, const string &rpc_msg);
 
 public:
 
@@ -40,9 +42,8 @@ private:
         max_body_length = 1024 * 5
     };
 
-    RPC_TYPE rpc_type;
     std::map<std::tuple<string, int>, std::shared_ptr<tcp::socket>> client_sockets_;
-    std::function<void(RPC_TYPE, string msg, std::tuple<string, int> server)> cb;
+    std::function<void(RPC_TYPE, string msg, std::tuple<string, int> server)> cb_;
     char big_char[max_body_length];
     char meta_char[4];
 //    std::map<std::tuple<string, int>, std::shared_ptr<tcp::socket>> _connection_map;

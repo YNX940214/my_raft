@@ -9,11 +9,12 @@
 #include <iostream>
 #include <string>
 
+#define DEBUG_FACTOR 1;
 using std::string;
 
 int random_candidate_expire() {
-    int max = 300;
-    int min = 150;
+    int max = 300 * DEBUG_FACTOR;
+    int min = 150 * DEBUG_FACTOR;
     int range = max - min + 1;
     int num = rand() % range + min;
 
@@ -21,8 +22,8 @@ int random_candidate_expire() {
 }
 
 int random_rv_retry_expire() {
-    int max = 10;
-    int min = 5;
+    int max = 10 * DEBUG_FACTOR;
+    int min = 5 * DEBUG_FACTOR;
     int range = max - min + 1;
     int num = rand() % range + min;
 
@@ -30,8 +31,8 @@ int random_rv_retry_expire() {
 }
 
 int random_ae_retry_expire() {
-    int max = 10;
-    int min = 5;
+    int max = 10 * DEBUG_FACTOR;
+    int min = 5 * DEBUG_FACTOR;
     int range = max - min + 1;
     int num = rand() % range + min;
     return num;
@@ -59,5 +60,15 @@ string server2str(const std::tuple<string, int> &server) {
     int port = std::get<1>(server);
     return ip + ":" + std::to_string(port);
 }
+
+//string rpc2str(string msg) {
+//    string type = msg.substr(0, 1);
+//    int int_type = atoi(string(type);
+//    if (int_type == 0){
+//
+//    }else if (int_type == 1){
+//
+//    }
+//}
 
 #endif //RAFT_UTIL_H

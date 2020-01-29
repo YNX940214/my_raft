@@ -38,8 +38,7 @@ public:
             nextIndex_[server_tuple] = -1; // -1 not 0, because at the beginning, entries[0] raise Exception,
             Follower_saved_index[server_tuple] = 0;
             current_rpc_lsn_[server_tuple] = 0;
-            deadline_timer timer(loop);
-            auto sp = make_shared<deadline_timer>(std::move(timer));
+            auto sp = make_shared<deadline_timer>(loop);
             retry_timers_.insert({server_tuple, sp});
         }
     }
@@ -51,19 +50,20 @@ public:
                 {"127.0.0.1", 7777},
                 {"127.0.0.1", 9999},
         };
-        majority_ = 3;
-        needed_votes_ = 2;
-        N_ = 5;
+        majority_ = 2;
+        N_ = 3;
     }
 
     void run() {
         network_.startAccept();
         int waiting_counts = candidate_timer_.expires_from_now(boost::posix_time::milliseconds(random_candidate_expire()));
         if (waiting_counts != 0) {
-            throw std::logic_error("初始化阶段这里不可能为非0");
+            throw std::logic_error("when server starts this can't be 0");
         } else {
             candidate_timer_.async_wait([this](const boost::system::error_code &error) {
+                Log_trace << "handler in run() expired, error: " << error.message();
                 if (error == boost::asio::error::operation_aborted) {
+                    Log_trace << "handler in run() canceled()";
                     //可能会被在follow_deal_VoteRPC中取消，或者ARPC中取消，但是按照目前看来被cancel什么都不用管，把执行流让给主动cancel定时器的函数就行了
                 } else {
                     trans2C();
@@ -74,13 +74,13 @@ public:
     }
 
     void cancel_all_timers() {
-        BOOST_LOG_TRIVIAL(trace) << "[BEGIN] cancel_all_timers ";
+        Log_trace << "begin";
         int canceled_number = candidate_timer_.cancel();
         {
             std::ostringstream oss;
             oss << canceled_number << " handlers was canceled on the candidate_timer_" << endl;
             string s = oss.str();
-            BOOST_LOG_TRIVIAL(debug) << s;
+            Log_debug << s;
         }
 
         /*
@@ -92,47 +92,50 @@ public:
         for (auto pair : retry_timers_) {
             pair.second->expires_at(boost::posix_time::min_date_time);
         }
-        BOOST_LOG_TRIVIAL(trace) << "[DONE] cancel_all_timers";
+        Log_trace << "done";
     }
 
 private:
     void trans2F(int term) {
-        //todo clean election state（从candidate trans过来）
-        //todo cancel all the timers
+        Log_info << "begin";
+        cancel_all_timers();
+        winned_votes_ = 0;
         term_ = term;
         state_ = follower;
         int waiting_count = candidate_timer_.expires_from_now(boost::posix_time::milliseconds(random_candidate_expire()));
-        if (waiting_count == 0) {
-            throw std::logic_error("trans2F是因为收到了外界rpc切换成follower，所以至少有一个cb_tran2_candidate的定时器，否则就是未考虑的情况");
+        if (waiting_count != 0) {
+            throw std::logic_error("trans2F在一开始已经执行了cancel_all_timers函数，所以这里不应该有waiting_count=0");
         }
         candidate_timer_.async_wait([this](const boost::system::error_code &error) {
+            Log_trace << "handler in trans2F expired, error: " << error.message();
             if (error == boost::asio::error::operation_aborted) {
-                //啥都不做，让react处理
+                Log_debug << "handler in trans2F is canceled";
             } else {
                 trans2C();
             }
         });
+        Log_info << "done";
     }
 
     void trans2P() {
-        BOOST_LOG_TRIVIAL(trace) << "[begin] trans2P";
-
-        //todo cancel all timers(maybe, need a deeper think)
+        Log_info << "begin";
+        cancel_all_timers();
         state_ = primary;
         for (const auto &server: configuration_) {
             AE(server);
         }
-        BOOST_LOG_TRIVIAL(trace) << "[done] trans2P";
+        Log_info << "done";
     }
 
     void trans2C() {
-        BOOST_LOG_TRIVIAL(trace) << "[begin] trans2C";
+        Log_info << "begin";
         /*
          * candidate can trans 2 candidate, we need to cancel the timer
          * 刚跑起来的时候这里有个bug，rv的重传超时设置成了秒，这导致trans2candidate的时候，rv的timer还没有超时，所以再次set timer expire的时候检查hook数目不为0，属于一个被遗漏的bug，但找到后修复了，但是这
          */
         cancel_all_timers();
         term_++;
+        Log_info << "current term: " << term_;
         state_ = candidate;
         winned_votes_ = 1;
         //设置下一个term candidate的定时器
@@ -144,6 +147,7 @@ private:
             throw std::logic_error("trans2C只能是timer_candidate_expire自然到期触发，所以不可能有waiting_count不为0的情况，否则就是未考虑的情况");
         }
         candidate_timer_.async_wait([this](const boost::system::error_code &error) {
+            Log_trace << "handler in trans2C expired, error: " << error.message();
             if (error == boost::asio::error::operation_aborted) {
                 //do nothing, leave react to deal with the logic
             } else {
@@ -156,17 +160,19 @@ private:
                 RV(server);
             }
         }
-        BOOST_LOG_TRIVIAL(trace) << "[done] trans2C";
+        Log_info << "done";
     }
 
 private:
     string build_rpc_ae_string(const tuple<string, int> &server) {
-        unsigned int server_current_rpc_lsn = current_rpc_lsn_[server];
+        Log_trace << "begin: server: " << server;
         AppendEntryRpc rpc;
+        unsigned int server_current_rpc_lsn = current_rpc_lsn_[server];
         rpc.set_lsn(server_current_rpc_lsn);
         rpc.set_term(term_);
-        int index_to_send = nextIndex_[server];
         rpc.set_commit_index(commit_index_);
+
+        int index_to_send = nextIndex_[server];
         if (index_to_send > 0) {
             rpc_Entry prev_entry = entries_.get(index_to_send - 1);
             rpc.set_prelog_term(prev_entry.term());
@@ -177,7 +183,7 @@ private:
         if (index_to_send == entries_.size()) {
             //empty rpc as HB
         } else {
-            const rpc_Entry &entry = entries_.get(index_to_send);  //如何做Entry到protobuf的映射？
+            const rpc_Entry &entry = entries_.get(index_to_send);
             rpc_Entry *entry_to_send = rpc.add_entry();
             entry_to_send->set_term(entry.term());
             entry_to_send->set_msg(entry.msg());
@@ -185,11 +191,11 @@ private:
         }
         string msg;
         rpc.SerializeToString(&msg);
-        int len = 4 + msg.size();
-        return to_string(len) + to_string(1) + msg;
+        return to_string(APPEND_ENTRY) + msg;
     }
 
     void AE(const tuple<string, int> &server) {
+        Log_debug << "begin";
         string ae_rpc_str = build_rpc_ae_string(server);
         writeTo(server, ae_rpc_str);   //考虑如下场景，发了AE1,index为100,然后定时器到期重发了AE2,index为100，这时候收到ae1的resp为false，将index--,如果ae2到F，又触发了一次resp，这两个rpc的请求一样，resp一样，但是P收到两个一样的resp会将index--两次
         shared_ptr<deadline_timer> t1 = retry_timers_[server];
@@ -209,9 +215,12 @@ private:
                 }
             });
         }
+        BOOST_LOG_TRIVIAL(trace) << "[done] AE ";
     }
 
     string build_rpc_rv_string(const tuple<string, int> &server) {
+        BOOST_LOG_TRIVIAL(trace) << "[begin] build_rpc_rv_string ";
+
         unsigned int server_current_rpc_lsn = current_rpc_lsn_[server];
         RequestVoteRpc rpc;
         rpc.set_lsn(server_current_rpc_lsn);
@@ -219,9 +228,9 @@ private:
         rpc.set_latest_index(entries_.size() - 1);
         string msg;
         rpc.SerializeToString(&msg);
-        int len = 4 + msg.size();
-        //这里有个bug我们先不处理，在msg特别长的时候会出现
-        return to_string(len) + to_string(1) + msg;
+
+        BOOST_LOG_TRIVIAL(trace) << "[begin] build_rpc_rv_string ";
+        return to_string(REQUEST_VOTE) + msg;
     }
 
     void RV(const tuple<string, int> &server) {
@@ -254,6 +263,7 @@ private:
 
 private:
     void reactToIncomingMsg(RPC_TYPE rpc_type_, const string msg, const tuple<string, int> &server) {
+        Log_trace << "begin: RPC_TYPE: " << rpc_type_ << ", msg: " << msg << ", server: " << server2str(server);
         //proto buf decode
         if (rpc_type_ == REQUEST_VOTE) {
             RequestVoteRpc rv;
@@ -274,9 +284,12 @@ private:
         } else {
             BOOST_LOG_TRIVIAL(error) << "unknown action: " << rpc_type_ << ", the whole msg string is:\n" + msg;
         }
+        BOOST_LOG_TRIVIAL(trace) << "[done] reactToIncomingMsg( RPC_TYPE:  " << rpc_type_ << ", msg: " << msg << ", server: " << server2str(server);
     }
 
     void react2ae(const tuple<string, int> &server, AppendEntryRpc rpc_ae) {
+        BOOST_LOG_TRIVIAL(trace) << "[begin] react2ae(server: " << server2str(server);
+
         int remote_term = rpc_ae.term();
         int prelog_term = rpc_ae.prelog_term();
         int commit_index = rpc_ae.commit_index();
@@ -343,10 +356,12 @@ private:
                 throw logic_error("rpc_ae's entry size is bigger 1");
             }
         }
+        BOOST_LOG_TRIVIAL(trace) << "[done] react2ae(server: " << server2str(server);
     }
 
     //begin from here
     void react2rv(tuple<string, int> server, RequestVoteRpc rpc_rv) {
+        Log_trace << "begin: server: " << server2str(server) << ", RV: ...";
         int remote_term = rpc_rv.term();
         int rpc_lsn = rpc_rv.lsn();
         int remote_latest_term = rpc_rv.latest_term();
@@ -381,7 +396,7 @@ private:
                     }
                 }
                 if (should_vote) {
-                    make_resp_rv(false, "react2rv: A vote is send", server, rpc_lsn);
+                    make_resp_rv(true, "react2rv: A vote is send", server, rpc_lsn);
                     already_voted_ = true;
                 } else {
                     make_resp_rv(false, "react2rv: A_vote is denied for primary doesn't have newer log", server, rpc_lsn);
@@ -390,9 +405,12 @@ private:
                 make_resp_rv(false, "react2rv: No votes left this term", server, rpc_lsn);
             }
         }
+        Log_trace << "done: server: " << server2str(server) << ", RV: ...";
     }
 
     void react2resp_ae(const tuple<string, int> &server, Resp_AppendEntryRpc &resp_ae) {
+        BOOST_LOG_TRIVIAL(trace) << "[begin] react2resp_ae(server: " << server2str(server);
+
         int remote_term = resp_ae.term();
         if (term_ < remote_term) {
             trans2F(remote_term);
@@ -405,9 +423,13 @@ private:
                 throw std::logic_error("不可能的情况，主ae，收到resp_ae的remote_term与term_相等，但是state不为主，说明一个term出现了两个主，错误");
             }
         }
+        BOOST_LOG_TRIVIAL(trace) << "[done] react2resp_ae(server: " << server2str(server);
+
     }
 
     void react2resp_rv(tuple<string, int> server, Resp_RequestVoteRpc &resp_rv) {
+        BOOST_LOG_TRIVIAL(trace) << "[begin] react2resp_rv(server: " << server2str(server);
+
         int remote_term = resp_rv.term();
         if (term_ < remote_term) {
             trans2F(remote_term);
@@ -418,44 +440,40 @@ private:
                 candidate_deal_resp_rv_with_same_term(server, resp_rv);
             }
         }
+        BOOST_LOG_TRIVIAL(trace) << "[done] react2resp_rv(server: " << server2str(server);
+
     }
 
 private:
     void make_resp_rv(bool vote, string context_log, tuple<string, int> server, int lsn) {
+        BOOST_LOG_TRIVIAL(trace) << "[begin] make_resp_rv(vote: " << vote << ", context_log: " << context_log << ", server: " << server2str(server) << "lsn: " << lsn << ")";
         Resp_RequestVoteRpc resp_vote;
         resp_vote.set_ok(vote);
         resp_vote.set_term(term_);
         resp_vote.set_lsn(lsn);
         string msg;
         resp_vote.SerializeToString(&msg);
-        network_.writeTo(server, msg, [context_log](boost::system::error_code &ec, std::size_t) {
-            if (!ec) {
-                BOOST_LOG_TRIVIAL(debug) << "callback of '" << context_log << "' done";
-            } else {
-                BOOST_LOG_TRIVIAL(info) << "callback of '" << context_log << "' got an error: " << ec;
-            }
-        });
+        writeTo(server, to_string(RESP_VOTE) + msg);
+        BOOST_LOG_TRIVIAL(trace) << "[done] make_resp_rv(vote: " << vote << ", context_log: " << context_log << ", server: " << server2str(server) << "lsn: " << lsn << ")";
     }
 
     void make_resp_ae(bool ok, string context_log, tuple<string, int> server, int lsn) {
+        BOOST_LOG_TRIVIAL(trace) << "[begin] make_resp_ae(ok: " << ok << ", context_log: " << context_log << ", server: " << server2str(server) << "lsn: " << lsn << ")";
         Resp_AppendEntryRpc resp_entry;
         resp_entry.set_ok(ok);
         resp_entry.set_term(term_);
         resp_entry.set_lsn(lsn);
         string msg;
         resp_entry.SerializeToString(&msg);
-        network_.writeTo(server, msg, [context_log](boost::system::error_code &ec, std::size_t) {
-            if (!ec) {
-                BOOST_LOG_TRIVIAL(debug) << "callback of '" << context_log << "' done";
-            } else {
-                BOOST_LOG_TRIVIAL(info) << "callback of '" << context_log << "' got an  error: " << ec;
-            }
-        });
+        writeTo(server, to_string(RESP_APPEND) + msg);
+        BOOST_LOG_TRIVIAL(trace) << "[done] make_resp_ae(ok: " << ok << ", context_log: " << context_log << ", server: " << server2str(server) << "lsn: " << lsn << ")";
     }
 
 private: //helper functions, react2rv and react2ae is very simple in some situations (like term_ < remote), but some situations really wants deal(like for resp2rv a vote is granted), we deal them here
     // this is term_ == remote term, otherwise we deal somewhere else(actually just deny or trans2F)
     inline void primary_deal_resp_ae_with_same_term(const tuple<string, int> &server, Resp_AppendEntryRpc &resp_ae) {
+        BOOST_LOG_TRIVIAL(trace) << "[begin] primary_deal_resp_ae_with_same_term(server: " << server2str(server);
+
         int resp_lsn = resp_ae.lsn();
         int current_rpc_lsn = current_rpc_lsn_[server];
         if (current_rpc_lsn != resp_lsn) {
@@ -504,10 +522,14 @@ private: //helper functions, react2rv and react2ae is very simple in some situat
 
             }
         }
+        BOOST_LOG_TRIVIAL(trace) << "[done] primary_deal_resp_ae_with_same_term(server: " << server2str(server);
+
     }
 
     // candidate deal with resp_rv with the same term (because other resp_rv situation is simple, only this one needs a little logic)
     inline void candidate_deal_resp_rv_with_same_term(const tuple<string, int> &server, Resp_RequestVoteRpc &resp_rv) {
+        BOOST_LOG_TRIVIAL(trace) << "[begin] candidate_deal_resp_rv_with_same_term(server: " << server2str(server);
+
         int resp_lsn = resp_rv.lsn();
         int current_rpc_lsn = current_rpc_lsn_[server];
         if (current_rpc_lsn != resp_lsn) {
@@ -527,10 +549,14 @@ private: //helper functions, react2rv and react2ae is very simple in some situat
                 // this mean remote follower has already voted for other candidate with the same term, just do nothing and let candidate_timer expires to enter the next term candidate
             }
         }
+        BOOST_LOG_TRIVIAL(trace) << "[done] candidate_deal_resp_rv_with_same_term(server: " << server2str(server);
+
     }
 
 private:
     inline void primary_update_commit_index(const tuple<string, int> &server, int index) {
+        BOOST_LOG_TRIVIAL(trace) << "[begin] primary_update_commit_index(server: " << server2str(server) << ", index: " << index << ")";
+
         Follower_saved_index[server] = index;
         // this can be done by find the k
         vector<int> temp_sort(configuration_.size(), 0);
@@ -540,9 +566,13 @@ private:
         }
         std::reverse(temp_sort.begin(), temp_sort.end());
         commit_index_ = temp_sort[majority_];
+        BOOST_LOG_TRIVIAL(trace) << "[done] primary_update_commit_index(server: " << server2str(server) << ", index: " << index << ")";
+
     }
 
     inline void follower_update_commit_index(unsigned remote_commit_index, unsigned remote_prelog_index) {
+        BOOST_LOG_TRIVIAL(trace) << "[begin] follower_update_commit_index(remote_commit_index: " << remote_commit_index << ", remote_prelog_index: " << remote_prelog_index << ")";
+
         int smaller_index = smaller(remote_commit_index, remote_prelog_index);
         if (smaller_index > commit_index_) {
             commit_index_ = smaller_index;
@@ -552,16 +582,23 @@ private:
             string err = "remote_commit_index " + std::to_string(smaller_index) + " is smaller than local commit_index " + std::to_string(commit_index_) + ", this is impossible";
             BOOST_LOG_TRIVIAL(error) << err;
         }
+        BOOST_LOG_TRIVIAL(trace) << "[done] follower_update_commit_index(remote_commit_index: " << remote_commit_index << ", remote_prelog_index: " << remote_prelog_index << ")";
 
     }
 
     void writeTo(tuple<string, int> server, string msg) {
+//        在这里写个函数将msg print解析一下看看是不是真确的 todo
+//        Log_trace << "begin: server: "<<server2str(server)<<", "
+
         network_.writeTo(server, msg, std::bind(&instance::deal_with_write_error, this, std::placeholders::_1, std::placeholders::_2));
+        BOOST_LOG_TRIVIAL(trace) << "[done] writeTo(server: " << server2str(server) << ", msg: " << msg << ")";
+
     }
 
     void deal_with_write_error(boost::system::error_code &ec, std::size_t) {
         //todo consider what to do when write failed, (maybe not nothing, because a write failed may means network unreachable, let the retry mechanism to deal with it)
         BOOST_LOG_TRIVIAL(error) << "write error" << ec.message();
+
     }
 
 private:
