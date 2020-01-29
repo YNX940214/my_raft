@@ -12,7 +12,7 @@ string __get_ip_from_socket__(tcp::socket &peer) {
     return ip;
 }
 
-RPC::RPC(boost::asio::io_context &io, const tcp::endpoint &endpoint, std::function<void(RPC_TYPE, string, std::tuple<string, int> server)> cb) : io_(io), _acceptor(io, endpoint), cb_(cb) {
+RPC::RPC(boost::asio::io_context &io, const tcp::endpoint &endpoint, std::function<void(RPC_TYPE, string)> cb) : io_(io), _acceptor(io, endpoint), cb_(cb) {
 }
 
 
@@ -25,9 +25,10 @@ inline void RPC::add_header_then_write_and_hook(std::shared_ptr<tcp::socket> sp,
     memcpy(send_buffer + 4, msg.c_str(), msg_len);
 
     boost::asio::async_write(*sp, boost::asio::buffer(send_buffer, msg_len + 4), [](const boost::system::error_code &error, std::size_t bytes_transferred) {
-        BOOST_LOG_TRIVIAL(trace) << "[begin] add_header_then_write_and_hook handler(error: " << error.message() << ", bytes_transferred: " << bytes_transferred << ")";
+        Log_trace << "[begin] handler in add_header_then_write_and_hook exipired, error: "<<error.message();
         //write succeed, do nothing
-        BOOST_LOG_TRIVIAL(trace) << "[done] add_header_then_write_and_hook handler(error: " << error.message() << ", bytes_transferred: " << bytes_transferred << ")";
+        Log_trace << "[done] handler in add_header_then_write_and_hook exipired, error: "<<error.message();
+
     });
 }
 
@@ -138,8 +139,8 @@ void RPC::body_callback(std::shared_ptr<tcp::socket> peer, const boost::system::
         RPC_TYPE remote_rpc_type = static_cast<RPC_TYPE>(atoi(char_rpc_type));
 
         std::tuple<string, int> server = get_peer_server_tuple(peer);
-        string msg(big_char + len_type, bytes_transferred - len_type); //纯的msg，不包括rpc type，比如已知rpc_type为Resp_AppendEntryRPC，那么msg的内容为{ ok=true, term =10}
-        cb_(remote_rpc_type, msg, server);
+        string msg(big_char + len_type, bytes_transferred - len_type);//纯的msg，不包括rpc type，比如已知rpc_type为Resp_AppendEntryRPC，那么msg的内容为{ ok=true, term =10}
+        cb_(remote_rpc_type, msg);
     }
 }
 

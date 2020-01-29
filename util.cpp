@@ -8,6 +8,8 @@
 #include "util.h"
 #include <iostream>
 #include <string>
+#include "rpc.pb.h"
+#include <sstream>
 
 #define DEBUG_FACTOR 1;
 using std::string;
@@ -61,14 +63,59 @@ string server2str(const std::tuple<string, int> &server) {
     return ip + ":" + std::to_string(port);
 }
 
-//string rpc2str(string msg) {
-//    string type = msg.substr(0, 1);
-//    int int_type = atoi(string(type);
-//    if (int_type == 0){
-//
-//    }else if (int_type == 1){
-//
-//    }
-//}
+string rpc_ae2str(const raft_rpc::AppendEntryRpc &ae) {
+    std::ostringstream oss;
+    oss << "RPC_AE:\n"
+           "term: " << ae.term()
+        << "\nprelog_term: " << ae.prelog_term()
+        << "\ncommit_index: " << ae.commit_index()
+        << "\nlsn: " << ae.lsn()
+        << "\nip: " << ae.ip()
+        << "\nport: " << ae.port()
+        << "\nae.rpc_entry:"
+           "\n\tterm: " << ae.entry(0).term()
+        << "\n\tindex: " << ae.entry(0).index()
+        << "\n\tmsg: " << ae.entry(0).msg();
+    string s = oss.str();
+    return s;
+}
+
+string rpc_rv2str(const raft_rpc::RequestVoteRpc &rv) {
+    std::ostringstream oss;
+    oss << "RPC_RV:\n"
+           "term: " << rv.term()
+        << "\nlatest_index: " << rv.latest_index()
+        << "\nlatest_term: " << rv.latest_term()
+        << "\nlsn: " << rv.lsn()
+        << "\nip: " << rv.ip()
+        << "\nport: " << rv.port();
+    string s = oss.str();
+    return s;
+}
+
+string resp_ae2str(const raft_rpc::Resp_AppendEntryRpc &resp) {
+    std::ostringstream oss;
+    oss << "resp_ae:\n"
+           "ok: " << resp.ok()
+        << "\nterm: " << resp.term()
+        << "\nlsn: " << resp.lsn()
+        << "\nip: " << resp.ip()
+        << "\nport: " << resp.port();
+    string s = oss.str();
+    return s;
+}
+
+
+string resp_rv2str(const raft_rpc::Resp_RequestVoteRpc &resp) {
+    std::ostringstream oss;
+    oss << "resp_rv:\n"
+           "ok: " << resp.ok()
+        << "\nterm: " << resp.term()
+        << "\nlsn: " << resp.lsn()
+        << "\nip: " << resp.ip()
+        << "\nport: " << resp.port();
+    string s = oss.str();
+    return s;
+}
 
 #endif //RAFT_UTIL_H

@@ -14,7 +14,7 @@ enum RPC_TYPE {
 
 class RPC {
 public:
-    RPC(boost::asio::io_context &io, const tcp::endpoint &endpoint, std::function<void(RPC_TYPE, string, std::tuple<string, int> server)> cb);
+    RPC(boost::asio::io_context &io, const tcp::endpoint &endpoint, std::function<void(RPC_TYPE, string)> cb);
 
     void writeTo(std::tuple<string, int> server, string rpc_msg, std::function<void(boost::system::error_code &ec, std::size_t)> cb); //cb为callback，在RPC::writeTo中根据成功/失败执行下一步动作
     void startAccept();
@@ -43,7 +43,7 @@ private:
     };
 
     std::map<std::tuple<string, int>, std::shared_ptr<tcp::socket>> client_sockets_;
-    std::function<void(RPC_TYPE, string msg, std::tuple<string, int> server)> cb_;
+    std::function<void(RPC_TYPE, string msg)> cb_;
     char big_char[max_body_length];
     char meta_char[4];
 //    std::map<std::tuple<string, int>, std::shared_ptr<tcp::socket>> _connection_map;

@@ -4,6 +4,7 @@
 
 #ifndef RAFT_UTIL_H
 #define RAFT_UTIL_H
+#include "rpc.pb.h"
 
 #define Log_trace       BOOST_LOG_TRIVIAL(trace) << __FUNCTION__ << " "
 #define Log_debug       BOOST_LOG_TRIVIAL(debug) << __FUNCTION__ << " "
@@ -27,5 +28,8 @@ bool file_exists(const string &path);
 
 string server2str(const std::tuple<string,int> & server);
 
-//string rpc2str(string msg);
+string rpc_ae2str(const raft_rpc::AppendEntryRpc &ae);
+string rpc_rv2str(const raft_rpc::RequestVoteRpc &rv);
+string resp_ae2str(const raft_rpc::Resp_AppendEntryRpc &resp);
+string resp_rv2str(const raft_rpc::Resp_RequestVoteRpc &resp);
 #endif //RAFT_UTIL_H
