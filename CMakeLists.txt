@@ -31,7 +31,8 @@ add_executable(raft raft.cpp
         util.cpp
         entry/data.cpp
         entry/data.h
-        )
+        Timer.cpp
+        Timer.h)
 if (protobuf_MODULE_COMPATIBLE) #Legacy mode
     target_include_directories(raft PUBLIC ${PROTOBUF_INCLUDE_DIRS})
     target_link_libraries(raft ${PROTOBUF_LIBRARIES})
@@ -47,6 +48,10 @@ else ()
             ${Boost_SYSTEM_LIBRARY})
     protobuf_generate(TARGET raft)
 endif ()
+
+
+#add_executable(test_map_insert tests/test_map_insert.cpp)
+
 
 #add_executable(boost_log_trivial tests/boost_log_trivial.cpp)
 #

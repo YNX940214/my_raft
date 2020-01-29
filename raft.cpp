@@ -8,6 +8,7 @@
 #include "rpc/rpc.h"
 #include "rpc.pb.h"
 #include "entry/entry.h"
+#include "Timer.h"
 
 using namespace boost::asio;
 using namespace std;
@@ -30,6 +31,7 @@ public:
             state_(follower),
             already_voted_(false),
             candidate_timer_(loop),
+            commit_index_(-1),
             network_(loop, _endpoint, std::bind(&instance::reactToIncomingMsg, this, std::placeholders::_1, std::placeholders::_2)),
 //            state_machine_(),
             winned_votes_(0) {
@@ -38,7 +40,7 @@ public:
             nextIndex_[server_tuple] = -1; // -1 not 0, because at the beginning, entries[0] raise Exception,
             Follower_saved_index[server_tuple] = 0;
             current_rpc_lsn_[server_tuple] = 0;
-            auto sp = make_shared<deadline_timer>(loop);
+            auto sp = make_shared<Timer>(loop);
             retry_timers_.insert({server_tuple, sp});
         }
     }
@@ -90,7 +92,7 @@ public:
          *  and when executed the handlers will check if the special value is set, if set, that means the handler has been canceled.
          */
         for (auto pair : retry_timers_) {
-            pair.second->expires_at(boost::posix_time::min_date_time);
+            pair.second->get_core().expires_at(boost::posix_time::min_date_time);
         }
         Log_trace << "done";
     }
@@ -121,8 +123,11 @@ private:
         Log_info << "begin";
         cancel_all_timers();
         state_ = primary;
-        for (const auto &server: configuration_) {
-            AE(server);
+        for (const auto &server : configuration_) {
+            int port = std::get<1>(server);
+            if (port != port_) {
+                AE(server);
+            }
         }
         Log_info << "done";
     }
@@ -178,19 +183,19 @@ private:
         if (index_to_send > 0) {
             rpc_Entry prev_entry = entries_.get(index_to_send - 1);
             rpc.set_prelog_term(prev_entry.term());
+            if (index_to_send == entries_.size()) {
+                //empty rpc as HB
+            } else {
+                const rpc_Entry &entry = entries_.get(index_to_send);
+                rpc_Entry *entry_to_send = rpc.add_entry();
+                entry_to_send->set_term(entry.term());
+                entry_to_send->set_msg(entry.msg());
+                entry_to_send->set_index(entry.index());
+            }
         } else if (index_to_send <= 0) {
             rpc.set_prelog_term(-1);
         }
 
-        if (index_to_send == entries_.size()) {
-            //empty rpc as HB
-        } else {
-            const rpc_Entry &entry = entries_.get(index_to_send);
-            rpc_Entry *entry_to_send = rpc.add_entry();
-            entry_to_send->set_term(entry.term());
-            entry_to_send->set_msg(entry.msg());
-            entry_to_send->set_index(entry.index());
-        }
         Log_debug << rpc_ae2str(rpc);
         string msg;
         rpc.SerializeToString(&msg);
@@ -206,12 +211,12 @@ private:
         Log_debug << "the AE to send is:" << rpc_ae2str(ae);
 
         writeTo(server, ae_rpc_str);   //考虑如下场景，发了AE1,index为100,然后定时器到期重发了AE2,index为100，这时候收到ae1的resp为false，将index--,如果ae2到F，又触发了一次resp，这两个rpc的请求一样，resp一样，但是P收到两个一样的resp会将index--两次，所以需要rpc_lsn的存在
-        shared_ptr<deadline_timer> t1 = retry_timers_[server];
-        int waiting_counts = t1->expires_from_now(boost::posix_time::milliseconds(random_ae_retry_expire()));
+        shared_ptr<Timer> t1 = retry_timers_[server];
+        int waiting_counts = t1->get_core().expires_from_now(boost::posix_time::milliseconds(random_ae_retry_expire()));
         if (waiting_counts != 0) {
             throw std::logic_error("should be zero, a timer can't be interrupt by network, but when AE is called, there should be no hooks on the timer");
         } else {
-            t1->async_wait([this, server](const boost::system::error_code &error) {
+            t1->get_core().async_wait([this, server](const boost::system::error_code &error) {
                 Log_debug << "AE_retry handler in AE expired, error: " << error.message();
                 if (error == boost::asio::error::operation_aborted) {
                     //do nothing, maybe log
@@ -247,12 +252,12 @@ private:
 
         RequestVoteRpc rv;
         rv.ParseFromString(rv_rpc_str.substr(1));
-        Log_debug << "the RV to send is:" << rpc_rv2str(rv);
+        Log_debug << "the made rpc_rv to send to " << server2str(server) << " is: " << rpc_rv2str(rv);
 
         writeTo(server, rv_rpc_str);
-        shared_ptr<deadline_timer> timer = retry_timers_[server];
-        auto last_expire_time = timer->expires_at();
-        int waiting_counts = timer->expires_from_now(boost::posix_time::milliseconds(random_rv_retry_expire()));
+        shared_ptr<Timer> timer = retry_timers_[server];
+        auto last_expire_time = timer->get_core().expires_at();
+        int waiting_counts = timer->get_core().expires_from_now(boost::posix_time::milliseconds(random_rv_retry_expire()));
         if (last_expire_time == boost::posix_time::min_date_time) {
             //canell_all_timers is called, so the retry should be canceled (no longer need to hook retry handler), just return
             Log_trace << "RV handler is canceled by setting its timer's expiring time to min_date_time";
@@ -262,7 +267,7 @@ private:
         if (waiting_counts != 0) {
             throw logic_error("if the cancel_all_timers has already canceled the RV retry, the exe stream will not come to here, as it comes here, there is something wrong");
         } else {
-            timer->async_wait([this, server](const boost::system::error_code &error) {
+            timer->get_core().async_wait([this, server](const boost::system::error_code &error) {
                 Log_trace << "[begin] RV handler expired, error: " << error.message();
                 if (error == boost::asio::error::operation_aborted) {
                     throw logic_error("其实我们不会运行到这里了，因为已经通过 set timer的方式设置定时器超时");
@@ -464,6 +469,8 @@ private:
         resp_vote.set_ok(vote);
         resp_vote.set_term(term_);
         resp_vote.set_lsn(lsn);
+        resp_vote.set_ip(ip_);
+        resp_vote.set_port(port_);
         string msg;
         resp_vote.SerializeToString(&msg);
         Log_debug << "the resp_rv to send is: " << resp_rv2str(resp_vote);
@@ -477,12 +484,14 @@ private:
         resp_entry.set_ok(ok);
         resp_entry.set_term(term_);
         resp_entry.set_lsn(lsn);
+        resp_entry.set_ip(ip_);
+        resp_entry.set_port(port_);
         Log_debug << "the resp_ae to send is: " << resp_ae2str(resp_entry);
 
         string msg;
         resp_entry.SerializeToString(&msg);
         writeTo(server, to_string(RESP_APPEND) + msg);
-        Log_trace << "begin";
+        Log_trace << "done";
     }
 
 private: //helper functions, react2rv and react2ae is very simple in some situations (like term_ < remote), but some situations really wants deal(like for resp2rv a vote is granted), we deal them here
@@ -514,7 +523,7 @@ private: //helper functions, react2rv and react2ae is very simple in some situat
                         // = , we don't send next index immediately, let the timers expires and send empty rps_ae as heartbeat, that situation 2 in AE()
                     } else {
                         //cancel timer todo check hook num
-                        retry_timers_[server]->cancel();
+                        retry_timers_[server]->get_core().cancel();
                         // immediately the next AE
                         AE(server);
                     }
@@ -532,7 +541,7 @@ private: //helper functions, react2rv and react2ae is very simple in some situat
                 if (last_send_index <= 0) {
                     // do nothing, let the timers expires
                 } else {
-                    retry_timers_[server]->cancel();
+                    retry_timers_[server]->get_core().cancel();
                     AE(server);
                 }
 
@@ -552,12 +561,12 @@ private: //helper functions, react2rv and react2ae is very simple in some situat
             bool ok = resp_rv.ok();
             if (ok) {
                 winned_votes_++;
-                if (winned_votes_ > needed_votes_) {
+                if (winned_votes_ >= majority_) {
                     trans2P();
                 } else {
                     // cancel the timer, if receive votes, we no longer need to rv more this term
-                    shared_ptr<deadline_timer> timer = retry_timers_[server];
-                    timer->cancel();
+                    shared_ptr<Timer> timer = retry_timers_[server];
+                    timer->get_core().cancel();
                 }
             } else {
                 // this mean remote follower has already voted for other candidate with the same term, just do nothing and let candidate_timer expires to enter the next term candidate
@@ -595,7 +604,7 @@ private:
         Log_trace << "done: remote_commit_index: " << remote_commit_index << ", remote_prelog_index: " << remote_prelog_index;
     }
 
-    void writeTo(tuple<string, int> server, string msg) {
+    void writeTo(const tuple<string, int> &server, const string &msg) {
 //        在这里写个函数将msg print解析一下看看是不是真确的 todo
         Log_trace << "begin: server: " << server2str(server);
         network_.writeTo(server, msg, std::bind(&instance::deal_with_write_error, this, std::placeholders::_1, std::placeholders::_2));
@@ -610,7 +619,6 @@ private:
 
 private:
     int winned_votes_;
-    int needed_votes_;
     //可以设置为bool，因为raft规定一个term只能一个主, 考虑这种情况，candidate发出了rv，但是所有f只能接受rv，不能发会resp_rv,但是我的设定中f在收到相同term的rv时不会重传，因为c会自动增加term再rv，只有收到了更高term的rv，f才会resp，所以这里只用bool就够了
     bool already_voted_;
 
@@ -631,7 +639,7 @@ private:
 
     //timers
     deadline_timer candidate_timer_;
-    map<std::tuple<string, int>, shared_ptr<deadline_timer> > retry_timers_;
+    map<std::tuple<string, int>, shared_ptr<Timer>> retry_timers_;
 
     // log & state machine
     int commit_index_;

@@ -16,7 +16,7 @@ class RPC {
 public:
     RPC(boost::asio::io_context &io, const tcp::endpoint &endpoint, std::function<void(RPC_TYPE, string)> cb);
 
-    void writeTo(std::tuple<string, int> server, string rpc_msg, std::function<void(boost::system::error_code &ec, std::size_t)> cb); //cb为callback，在RPC::writeTo中根据成功/失败执行下一步动作
+    void writeTo(const std::tuple<string, int> &server, const string &rpc_msg, std::function<void(boost::system::error_code &ec, std::size_t)> cb); //cb为callback，在RPC::writeTo中根据成功/失败执行下一步动作
     void startAccept();
 
 private:

@@ -25,14 +25,14 @@ inline void RPC::add_header_then_write_and_hook(std::shared_ptr<tcp::socket> sp,
     memcpy(send_buffer + 4, msg.c_str(), msg_len);
 
     boost::asio::async_write(*sp, boost::asio::buffer(send_buffer, msg_len + 4), [](const boost::system::error_code &error, std::size_t bytes_transferred) {
-        Log_trace << "[begin] handler in add_header_then_write_and_hook exipired, error: "<<error.message();
+        Log_trace << "[begin] handler in add_header_then_write_and_hook exipired, error: " << error.message();
         //write succeed, do nothing
-        Log_trace << "[done] handler in add_header_then_write_and_hook exipired, error: "<<error.message();
+        Log_trace << "[done] handler in add_header_then_write_and_hook exipired, error: " << error.message();
 
     });
 }
 
-void RPC::writeTo(std::tuple<string, int> server, string rpc_msg, std::function<void(boost::system::error_code &ec, std::size_t)> cb) {
+void RPC::writeTo(const std::tuple<string, int> &server, const string &rpc_msg, std::function<void(boost::system::error_code &ec, std::size_t)> cb) {
     try {
         auto sp = client_sockets_[server];
         if (sp) {
@@ -47,7 +47,9 @@ void RPC::writeTo(std::tuple<string, int> server, string rpc_msg, std::function<
                 if (error) {
                     BOOST_LOG_TRIVIAL(error) << "async_connect_error";
                 } else {
-                    client_sockets_.insert({server, sp});
+                    client_sockets_[server] = sp;
+//                    BOOST_LOG_TRIVIAL(debug) << "insert happenens";
+//                    int rp = client_sockets_[server]->remote_endpoint().port();
                     add_header_then_write_and_hook(sp, rpc_msg);
                 }
                 BOOST_LOG_TRIVIAL(trace) << "[done] writeTo async_connect handler: (error: " << error.message() << ")";
@@ -82,50 +84,31 @@ void RPC::accept_callback(const boost::system::error_code &error, std::shared_pt
     startAccept();
 }
 
-//todo 这种形式居然不能用，不跟它死磕了，用lambda
-//void RPC::read_header(tcp::socket peer) {
-////    boost::asio::async_read(peer, boost::asio::buffer(meta_char, 4), std::bind(&RPC::read_body, this, std::move(peer), std::placeholders::_1, std::placeholders::_2));
-////}
-
 void RPC::read_header(std::shared_ptr<tcp::socket> peer) {
     boost::asio::async_read(*peer, boost::asio::buffer(meta_char, 4), [this, peer](const boost::system::error_code &error, size_t bytes_transferred) {
-        BOOST_LOG_TRIVIAL(trace) << "[begin] read header handler: error: " << error.message();
+        std::tuple<string, int> server = get_peer_server_tuple(peer);
+        Log_trace << "begin: handler in read_header's async_read called, error: " << error.message();
         this->read_body(peer, error, bytes_transferred);
-        BOOST_LOG_TRIVIAL(trace) << "[done] read header handler: error: " << error.message();
-
     });
 }
 
 void RPC::read_body(std::shared_ptr<tcp::socket> peer, const boost::system::error_code &error, size_t bytes_transferred) {
-    BOOST_LOG_TRIVIAL(trace) << "[begin] RPC::read_body (error: " << error.message() << ", bytes_transferred: " << bytes_transferred << ")";
+    Log_trace << "begin: error: " << error.message() << ", bytes_transferred: " << bytes_transferred;
     if (error) {
-        BOOST_LOG_TRIVIAL(error) << error.message();
-        //出错
-//        peer. cancel() or close()
-        // 取消 能tm的取消么
+        Log_error << "error: " << error.message();
+        throw std::logic_error(error.message());  //这是完全有可能的，比如对面关闭了进程，需要处理
     } else {
         char char_msg_len[5] = "";
         memcpy(char_msg_len, meta_char, 4);
         int msg_len = atoi(char_msg_len);
-        //这里有个问题，我已经把socket move给了body_callback，还怎么再move 给read_head？所以我应该拿出信息，传给body_callback？
-        boost::asio::async_read(*peer, boost::asio::buffer(big_char, msg_len), [this, &peer](const boost::system::error_code &error, size_t bytes_transferred) {
+        boost::asio::async_read(*peer, boost::asio::buffer(big_char, msg_len), [this, peer](const boost::system::error_code &error, size_t bytes_transferred) {
+            Log_debug << "handler in read_body's async_read called, error: " << error.message();
             this->body_callback(peer, error, bytes_transferred);
         });
         read_header(peer);
     }
-    BOOST_LOG_TRIVIAL(trace) << "[done] RPC::read_body (error: " << error.message() << ", bytes_transferred: " << bytes_transferred << ")";
-
 }
 
-std::tuple<string, int> get_peer_server_tuple(std::shared_ptr<tcp::socket> peer) {
-    auto remote_ep = peer->remote_endpoint();
-    return std::make_tuple(remote_ep.address().to_string(), remote_ep.port());
-}
-
-void show_peer_remote_endpoint(std::shared_ptr<tcp::socket> peer) {
-    const auto &server = get_peer_server_tuple(peer);
-    cout << server2str(server);
-}
 
 void RPC::body_callback(std::shared_ptr<tcp::socket> peer, const boost::system::error_code &error, size_t bytes_transferred) {
     if (error) {
@@ -137,13 +120,8 @@ void RPC::body_callback(std::shared_ptr<tcp::socket> peer, const boost::system::
         char char_rpc_type[1] = "";
         memcpy(char_rpc_type, big_char, len_type);
         RPC_TYPE remote_rpc_type = static_cast<RPC_TYPE>(atoi(char_rpc_type));
-
-        std::tuple<string, int> server = get_peer_server_tuple(peer);
+        Log_debug << "body_callback received msg's rpc_type is: " << remote_rpc_type;
         string msg(big_char + len_type, bytes_transferred - len_type);//纯的msg，不包括rpc type，比如已知rpc_type为Resp_AppendEntryRPC，那么msg的内容为{ ok=true, term =10}
         cb_(remote_rpc_type, msg);
     }
 }
-
-//void RPC::getConnection(string ip, int port, std::functio) {
-//    如果是从pool中
-//}

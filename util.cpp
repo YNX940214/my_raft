@@ -10,9 +10,11 @@
 #include <string>
 #include "rpc.pb.h"
 #include <sstream>
+#include <boost/asio.hpp>
 
 #define DEBUG_FACTOR 1;
 using std::string;
+
 
 int random_candidate_expire() {
     int max = 300 * DEBUG_FACTOR;
@@ -63,6 +65,11 @@ string server2str(const std::tuple<string, int> &server) {
     return ip + ":" + std::to_string(port);
 }
 
+std::tuple<string, int> get_peer_server_tuple(std::shared_ptr<boost::asio::ip::tcp::socket> peer) {
+    auto remote_ep = peer->remote_endpoint();
+    return std::make_tuple(remote_ep.address().to_string(), remote_ep.port());
+}
+
 string rpc_ae2str(const raft_rpc::AppendEntryRpc &ae) {
     std::ostringstream oss;
     oss << "RPC_AE:\n"
@@ -72,10 +79,14 @@ string rpc_ae2str(const raft_rpc::AppendEntryRpc &ae) {
         << "\nlsn: " << ae.lsn()
         << "\nip: " << ae.ip()
         << "\nport: " << ae.port()
-        << "\nae.rpc_entry:"
-           "\n\tterm: " << ae.entry(0).term()
-        << "\n\tindex: " << ae.entry(0).index()
-        << "\n\tmsg: " << ae.entry(0).msg();
+        << "\nae.rpc_entry:";
+    if (ae.entry_size() != 0) {
+        oss << "\n\tterm: " << ae.entry(0).term()
+            << "\n\tindex: " << ae.entry(0).index()
+            << "\n\tmsg: " << ae.entry(0).msg();
+    } else {
+        oss << "empty";
+    }
     string s = oss.str();
     return s;
 }
