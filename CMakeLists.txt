@@ -48,6 +48,17 @@ else ()
     protobuf_generate(TARGET raft)
 endif ()
 
+#add_executable(boost_log_trivial tests/boost_log_trivial.cpp)
+#
+#target_link_libraries(boost_log_trivial
+#        ${Boost_LOG_LIBRARY}
+#        #        ${Boost_LOG_SETUP_LIBRARY}
+#        ${Boost_THREAD_LIBRARY}
+#
+#        )
+
+#        ${Boost_FILE_SYSTEM_LIBRARY}
+#        ${Boost_SYSTEM_LIBRARY})
 
 #add_executable(test_boost_timer_bug tests/boost_timer_bug.cpp
 #        )

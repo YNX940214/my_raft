@@ -13,6 +13,8 @@ message AppendEntryRpc {
     int32 commit_index = 3;
     repeated rpc_Entry entry = 4;
     int32 lsn = 5;
+    string ip = 6;
+    int32 port = 7;
 
 }
 
@@ -21,6 +23,8 @@ message Resp_AppendEntryRpc {
     bool ok = 1;
     int32 term = 2;
     int32 lsn = 3;
+    string ip = 4;
+    int32 port = 5;
 
 }
 
@@ -30,7 +34,8 @@ message RequestVoteRpc {
     int32 latest_index = 2;
     int32 latest_term = 3;
     int32 lsn = 4;
-
+    string ip = 5;
+    int32 port = 6;
 }
 
 
@@ -38,6 +43,7 @@ message Resp_RequestVoteRpc {
     bool ok = 1;
     int32 term = 2;
     int32 lsn = 3;
-
+    string ip = 4;
+    int32 port = 5;
 }
 
