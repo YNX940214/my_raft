@@ -6,12 +6,12 @@
 #define RAFT_UTIL_H
 #include "rpc.pb.h"
 #include <boost/asio.hpp>
-#define Log_trace       BOOST_LOG_TRIVIAL(trace) << __FUNCTION__ << " "
-#define Log_debug       BOOST_LOG_TRIVIAL(debug) << __FUNCTION__ << " "
-#define Log_info         BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << " "
-#define Log_warning        BOOST_LOG_TRIVIAL(warning) << __FUNCTION__ << " "
-#define Log_error       BOOST_LOG_TRIVIAL(error) << __FUNCTION__ << " "
-#define Log_fatal         BOOST_LOG_TRIVIAL(fatal) << __FUNCTION__ << " "
+#define Log_trace       BOOST_LOG_TRIVIAL(trace) << __FILE__ << " [" << __FUNCTION__ << "] "
+#define Log_debug       BOOST_LOG_TRIVIAL(debug) << __FILE__ << " [" << __FUNCTION__ << "] "
+#define Log_info         BOOST_LOG_TRIVIAL(info) << __FILE__ << " [" << __FUNCTION__ << "] "
+#define Log_warning        BOOST_LOG_TRIVIAL(warning) << __FILE__ << " [" << __FUNCTION__ << "] "
+#define Log_error       BOOST_LOG_TRIVIAL(error) <<__FILE__ << " [" << __FUNCTION__ << "] "
+#define Log_fatal         BOOST_LOG_TRIVIAL(fatal) <<__FILE__ << " [" << __FUNCTION__ << "] "
 
 
 using std::string;

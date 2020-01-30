@@ -45,45 +45,71 @@ public:
         }
     }
 
-    //mock 一下先
-    void load_config_from_file() {
-        configuration_ = {
-                {"127.0.0.1", 8888},
-                {"127.0.0.1", 7777},
-//                {"127.0.0.1", 9999}, todo
-        };
-        majority_ = 2;
-        N_ = 3;
-    }
-
     void run() {
         network_.startAccept();
         int waiting_counts = candidate_timer_.expires_from_now(boost::posix_time::milliseconds(random_candidate_expire()));
         if (waiting_counts != 0) {
             throw std::logic_error("when server starts this can't be 0");
         } else {
+            //todo 这部分代码有很多地方冗余了，可以考虑用bind做抽象
             candidate_timer_.async_wait([this](const boost::system::error_code &error) {
-                Log_trace << "handler in run() expired, error: " << error.message();
-                if (error == boost::asio::error::operation_aborted) {
-                    Log_trace << "handler in run() canceled()";
-                    //可能会被在follow_deal_VoteRPC中取消，或者ARPC中取消，但是按照目前看来被cancel什么都不用管，把执行流让给主动cancel定时器的函数就行了
+                if (error) {
+                    if (error == boost::asio::error::operation_aborted) {
+                        //throw std::logic_error("所有的handler通过set timer特殊值的方式取消，应该不可能出现operation_aborted");
+                        /*
+                         * 上面注释掉的代码抛出异常以检测，但是trans2C->cancel_all_timers—> expires 就会取消定时器（虽然它把expire time设置为min_date_time），所以上面总会抛异常，真确的做法是 return
+                         */
+                        return;
+                    } else {
+                        std::ostringstream oss;
+                        oss << "handler in run's candidate_timer, error: " << error.message();
+                        string str = oss.str();
+                        throw (str);
+                    }
                 } else {
-                    trans2C();
+                    auto expire_time = candidate_timer_.expires_at();
+                    if (expire_time == boost::posix_time::min_date_time) {
+                        Log_trace << "handler in run()'s candidate_timer_ is canceled by setting its timer's expiring time to min_date_time";
+                        return;                         // canceled，we can't do anything
+                    } else {
+                        trans2C();
+                    }
                 }
             });
         }
         ioContext.run();
     }
 
+private:
+    //mock 一下先
+    void load_config_from_file() {
+        configuration_ = {
+                {"127.0.0.1", 8888},
+                {"127.0.0.1", 7777},
+                {"127.0.0.1", 9999}
+        };
+        majority_ = 2;
+        N_ = 3;
+    }
+
     void cancel_all_timers() {
+        /*
+         * asio存在这样一种情况，timer1在2s后超时，timer2在3s后超时，timer1的handler会取消timer2，但是如果sleep了5s，那么timer2的handler将无法取消timer3的handler，cancel函数返回的数目是0
+         * 由于我的代码中逻辑在取消了handler被取消之后，不需要做任何事情，所以我在写代码的时候要保证一点的是，保证一个handler是一定能被取消的，并且（由于这个代码的特殊逻辑）被取消的handler不会做任何事！
+         * 保证一个handler是一定能被取消的，并且（由于这个代码的特殊逻辑）被取消的handler不会做任何事！
+         * 保证一个handler是一定能被取消的，并且（由于这个代码的特殊逻辑）被取消的handler不会做任何事！
+         */
         Log_trace << "begin";
-        int canceled_number = candidate_timer_.cancel();
-        {
-            std::ostringstream oss;
-            oss << canceled_number << " handlers was canceled on the candidate_timer_" << endl;
-            string s = oss.str();
-            Log_debug << s;
-        }
+
+//        int canceled_number = candidate_timer_.cancel();
+//        {
+//            std::ostringstream oss;
+//            oss << canceled_number << " handlers was canceled on the candidate_timer_" << endl;
+//            string s = oss.str();
+//            Log_debug << s;
+//        }
+        //对于candidate_timer_上面那种方法通过取消的方法并不安全
+        candidate_timer_.expires_at(boost::posix_time::min_date_time);
 
         /*
          * since cancel function can not cancel the handlers that is already expired, see boost_tiemr_bug(2).cpp, we reference
@@ -103,17 +129,36 @@ private:
         cancel_all_timers();
         winned_votes_ = 0;
         term_ = term;
+        already_voted_ = false;
         state_ = follower;
         int waiting_count = candidate_timer_.expires_from_now(boost::posix_time::milliseconds(random_candidate_expire()));
         if (waiting_count != 0) {
             throw std::logic_error("trans2F在一开始已经执行了cancel_all_timers函数，所以这里不应该有waiting_count=0");
         }
         candidate_timer_.async_wait([this](const boost::system::error_code &error) {
-            Log_trace << "handler in trans2F expired, error: " << error.message();
-            if (error == boost::asio::error::operation_aborted) {
-                Log_debug << "handler in trans2F is canceled";
+            Log_trace << "handler in trans2F's candidate_timers expired, error: " << error.message();
+            if (error) {
+                if (error == boost::asio::error::operation_aborted) {
+                    //throw std::logic_error("所有的handler通过set timer特殊值的方式取消，应该不可能出现operation_aborted");
+                    /*
+                     * 上面注释掉的代码抛出异常以检测，但是trans2C->cancel_all_timers—> expires 就会取消定时器（虽然它把expire time设置为min_date_time），所以上面总会抛异常，真确的做法是 return
+                     */
+                    return;
+                } else {
+                    std::ostringstream oss;
+                    oss << "handler in trans2F's candidate_timers, error: " << error.message();
+                    string str = oss.str();
+                    throw (str);
+                }
             } else {
-                trans2C();
+                auto expire_time = candidate_timer_.expires_at();
+                if (expire_time == boost::posix_time::min_date_time) {
+                    throw logic_error("逻辑错误，这里是不可能出现的，因为这个情景（trans2C未能即使取消h1，（然后RV->hook h2）h1运行)被waiting_counts != 0 完全覆盖了，如果抛出这个异常，说明出现了新的bug");
+//                    Log_trace << "handler in trans2F's candidate_timers is canceled by setting its timer's expiring time to min_date_time";
+//                    return;                         // canceled，we can't do anything
+                } else {
+                    trans2C();
+                }
             }
         });
         Log_info << "done";
@@ -152,11 +197,29 @@ private:
             throw std::logic_error("trans2C只能是timer_candidate_expire自然到期触发，所以不可能有waiting_count不为0的情况，否则就是未考虑的情况");
         }
         candidate_timer_.async_wait([this](const boost::system::error_code &error) {
-            Log_trace << "handler in trans2C expired, error: " << error.message();
-            if (error == boost::asio::error::operation_aborted) {
-                //do nothing, leave react to deal with the logic
+            Log_trace << "handler in trans2C's candidate_timers expired, error: " << error.message();
+            if (error) {
+                if (error == boost::asio::error::operation_aborted) {
+                    //throw std::logic_error("所有的handler通过set timer特殊值的方式取消，应该不可能出现operation_aborted");
+                    /*
+                     * 上面注释掉的代码抛出异常以检测，但是trans2C->cancel_all_timers—> expires 就会取消定时器（虽然它把expire time设置为min_date_time），所以上面总会抛异常，真确的做法是 return
+                     */
+                    return;
+                } else {
+                    std::ostringstream oss;
+                    oss << "handler in trans2C's candidate_timers, error: " << error.message();
+                    string str = oss.str();
+                    throw (str);
+                }
             } else {
-                trans2C();
+                auto expire_time = candidate_timer_.expires_at();
+                if (expire_time == boost::posix_time::min_date_time) {
+                    throw logic_error("逻辑错误，这里是不可能出现的，因为这个情景（trans2C未能即使取消h1，（然后RV->hook h2）h1运行)被waiting_counts != 0 完全覆盖了，如果抛出这个异常，说明出现了新的bug");
+//                    Log_trace << "handler in trans2C's candidate_timers is canceled by setting its timer's expiring time to min_date_time";
+//                    return;                         // canceled，we can't do anything
+                } else {
+                    trans2C();
+                }
             }
         });
         for (auto &server : configuration_) {
@@ -173,6 +236,7 @@ private:
         Log_trace << "begin: server: " << server2str(server);
         AppendEntryRpc rpc;
         unsigned int server_current_rpc_lsn = current_rpc_lsn_[server];
+        current_rpc_lsn_[server] = server_current_rpc_lsn + 1;
         rpc.set_lsn(server_current_rpc_lsn);
         rpc.set_term(term_);
         rpc.set_commit_index(commit_index_);
@@ -204,28 +268,47 @@ private:
 
     void AE(const tuple<string, int> &server) {
         Log_debug << "begin";
-        string ae_rpc_str = build_rpc_ae_string(server);
+        shared_ptr<Timer> t1 = retry_timers_[server];
 
+        string ae_rpc_str = build_rpc_ae_string(server);
         AppendEntryRpc ae;
         ae.ParseFromString(ae_rpc_str.substr(1));
-        Log_debug << "the AE to send is:" << rpc_ae2str(ae);
-
+        Log_debug << "build rpc_AE to " << server2str(server) << ":" << rpc_ae2str(ae);
         writeTo(server, ae_rpc_str);   //考虑如下场景，发了AE1,index为100,然后定时器到期重发了AE2,index为100，这时候收到ae1的resp为false，将index--,如果ae2到F，又触发了一次resp，这两个rpc的请求一样，resp一样，但是P收到两个一样的resp会将index--两次，所以需要rpc_lsn的存在
-        shared_ptr<Timer> t1 = retry_timers_[server];
+
+
         int waiting_counts = t1->get_core().expires_from_now(boost::posix_time::milliseconds(random_ae_retry_expire()));
         if (waiting_counts != 0) {
             throw std::logic_error("should be zero, a timer can't be interrupt by network, but when AE is called, there should be no hooks on the timer");
         } else {
-            t1->get_core().async_wait([this, server](const boost::system::error_code &error) {
-                Log_debug << "AE_retry handler in AE expired, error: " << error.message();
-                if (error == boost::asio::error::operation_aborted) {
-                    //do nothing, maybe log
+            t1->get_core().async_wait([this, t1, server](const boost::system::error_code &error) {
+                Log_trace << "handler in AE's retry timer to " << server2str(server) << " expired, error: " << error.message();
+                if (error) {
+                    if (error == boost::asio::error::operation_aborted) {
+                        //throw std::logic_error("所有的handler通过set timer特殊值的方式取消，应该不可能出现operation_aborted");
+                        /*
+                         * 上面注释掉的代码抛出异常以检测，但是trans2C->cancel_all_timers—> expires 就会取消定时器（虽然它把expire time设置为min_date_time），所以上面总会抛异常，真确的做法是 return
+                         */
+                        return;
+                    } else {
+                        std::ostringstream oss;
+                        oss << "handler in AE's retry timer to " << server2str(server) << ", error: " << error.message();
+                        string str = oss.str();
+                        throw (str);
+                    }
                 } else {
-                    /* situtations:
-                     * One: if the ae is lost, AE(server) will get the same index to send to followers
-                     * Two: P's index is [0,1], F's index is [0], P send ae(index=1) to F, resp_ae returns, the ok is true, the primary found (currentIndex[server]+1 == entries_.size()), then P won't cancel the timer but only add the currentIndex to 2, when the timer expires, it can found 2==entries_.size(), so send an empty AE
-                     * Three: P's index is [0,1,2], F's index is [0], P send ae(index=1) to F, resp_ae returns, the ok is true, the primary found (currentIndex[server]+1 "that's 2" < entries_.size() "that's 3" ), so P cancel the timer, add the currentIndex, and immediately send the next AE*/
-                    AE(server); //this will re-get the index to send, if before the timer expires, the resp returns and ok, and the resp is the ae of the last index, then we will not
+                    auto expire_time = t1->get_core().expires_at();
+                    if (expire_time == boost::posix_time::min_date_time) {
+                        Log_trace << "handler in AE's retry_timer_ to " << server2str(server) << " is canceled by setting its timer's expiring time to min_date_time";
+                        return;                         // canceled，we can't do anything
+                    } else {
+                        /* situtations:
+                         * One: if the ae is lost, AE(server) will get the same index to send to followers
+                         * Two: P's index is [0,1], F's index is [0], P send ae(index=1) to F, resp_ae returns, the ok is true, the primary found (currentIndex[server]+1 == entries_.size()), then P won't cancel the timer but only add the currentIndex to 2, when the timer expires, it can found 2==entries_.size(), so send an empty AE
+                         * Three: P's index is [0,1,2], F's index is [0], P send ae(index=1) to F, resp_ae returns, the ok is true, the primary found (currentIndex[server]+1 "that's 2" < entries_.size() "that's 3" ), so P cancel the timer, add the currentIndex, and immediately send the next AE
+                         * */
+                        AE(server); //this will re-get the index to send, if before the timer expires, the resp returns and ok, and the resp is the ae of the last index, then we will not
+                    }
                 }
             });
         }
@@ -235,6 +318,7 @@ private:
     string build_rpc_rv_string(const tuple<string, int> &server) {
         Log_trace << "begin: server: " << server2str(server);
         unsigned int server_current_rpc_lsn = current_rpc_lsn_[server];
+        current_rpc_lsn_[server] = server_current_rpc_lsn + 1;
         RequestVoteRpc rpc;
         rpc.set_lsn(server_current_rpc_lsn);
         rpc.set_term(term_);
@@ -248,31 +332,46 @@ private:
 
     void RV(const tuple<string, int> &server) {
         Log_debug << "begin: server: " << server2str(server);
-        string rv_rpc_str = build_rpc_rv_string(server);
+        shared_ptr<Timer> timer = retry_timers_[server];
 
+        string rv_rpc_str = build_rpc_rv_string(server);
         RequestVoteRpc rv;
         rv.ParseFromString(rv_rpc_str.substr(1));
-        Log_debug << "the made rpc_rv to send to " << server2str(server) << " is: " << rpc_rv2str(rv);
-
+        Log_debug << "build rpc_rv to " << server2str(server) << ":" << rpc_rv2str(rv);
         writeTo(server, rv_rpc_str);
-        shared_ptr<Timer> timer = retry_timers_[server];
-        auto last_expire_time = timer->get_core().expires_at();
         int waiting_counts = timer->get_core().expires_from_now(boost::posix_time::milliseconds(random_rv_retry_expire()));
-        if (last_expire_time == boost::posix_time::min_date_time) {
-            //canell_all_timers is called, so the retry should be canceled (no longer need to hook retry handler), just return
-            Log_trace << "RV handler is canceled by setting its timer's expiring time to min_date_time";
-            return;
-        }
-
         if (waiting_counts != 0) {
-            throw logic_error("if the cancel_all_timers has already canceled the RV retry, the exe stream will not come to here, as it comes here, there is something wrong");
+            /*
+             * throw logic_error("if the cancel_all_timers has already canceled the RV retry, the exe stream will not come to here, as it comes here, there is something wrong");
+             * 上述代码抛异常以便检查，实际为asset，因为我认为不会出现那种情况，但是回出现，情景如下：
+             * handler1（RV）expire 了但是为执行，此时trans2C执行，没有成功取消handler1（虽然handler1的expire时间已超过），但是hook了handler2，现在handler1执行，检查到timer上有1个handler，就是handler2，抛异常
+             */
+            return;
         } else {
-            timer->get_core().async_wait([this, server](const boost::system::error_code &error) {
-                Log_trace << "[begin] RV handler expired, error: " << error.message();
-                if (error == boost::asio::error::operation_aborted) {
-                    throw logic_error("其实我们不会运行到这里了，因为已经通过 set timer的方式设置定时器超时");
+            timer->get_core().async_wait([this, timer, server](const boost::system::error_code &error) {
+                Log_trace << "handler in RV's retry timer to " << server2str(server) << " expired, error: " << error.message();
+                if (error) {
+                    if (error == boost::asio::error::operation_aborted) {
+                        //throw std::logic_error("所有的handler通过set timer特殊值的方式取消，应该不可能出现operation_aborted");
+                        /*
+                         * 上面注释掉的代码抛出异常以检测，但是trans2C->cancel_all_timers—> expires 就会取消定时器（虽然它把expire time设置为min_date_time），所以上面总会抛异常，真确的做法是 return
+                         */
+                        return;
+                    } else {
+                        std::ostringstream oss;
+                        oss << "handler in RV's retry timer to " << server2str(server) << ", error: " << error.message();
+                        string str = oss.str();
+                        throw (str);
+                    }
                 } else {
-                    RV(server);
+                    auto expire_time = timer->get_core().expires_at();
+                    if (expire_time == boost::posix_time::min_date_time) {
+                        throw logic_error("逻辑错误，这里是不可能出现的，因为这个情景（trans2C未能即使取消h1，（然后RV->hook h2）h1运行)被waiting_counts != 0 完全覆盖了，如果抛出这个异常，说明出现了新的bug");
+//                        Log_trace << "handler in RV's retry_timer_ to " << server2str(server) << " is canceled by setting its timer's expiring time to min_date_time";
+//                        return;                         // canceled，we can't do anything
+                    } else {
+                        RV(server);
+                    }
                 }
             });
         }
@@ -280,28 +379,33 @@ private:
     }
 
 private:
-    void reactToIncomingMsg(RPC_TYPE rpc_type_, const string msg) {
-        Log_debug << "begin: RPC_TYPE: " << rpc_type_;
-        if (rpc_type_ == REQUEST_VOTE) {
+    void reactToIncomingMsg(RPC_TYPE _rpc_type, const string msg) {
+        Log_debug << "begin: RPC_TYPE: " << _rpc_type;
+        if (_rpc_type == REQUEST_VOTE) {
             RequestVoteRpc rv;
             rv.ParseFromString(msg);
             react2rv(rv);
-        } else if (rpc_type_ == APPEND_ENTRY) {
+        } else if (_rpc_type == APPEND_ENTRY) {
             AppendEntryRpc ae;
             ae.ParseFromString(msg);
             react2ae(ae);
-        } else if (rpc_type_ == RESP_VOTE) {
+        } else if (_rpc_type == RESP_VOTE) {
             Resp_RequestVoteRpc resp_rv;
             resp_rv.ParseFromString(msg);
             react2resp_rv(resp_rv);
-        } else if (rpc_type_ == RESP_APPEND) {
+        } else if (_rpc_type == RESP_APPEND) {
             Resp_AppendEntryRpc resp_ae;
             resp_ae.ParseFromString(msg);
             react2resp_ae(resp_ae);
+        } else if (_rpc_type == CLIENT_APPEND) {
+
         } else {
             Log_error << "unknown action";
         }
-        Log_debug << "done: RPC_TYPE: " << rpc_type_;
+    }
+
+    void client_append(string) {
+
     }
 
     void react2ae(AppendEntryRpc rpc_ae) {
@@ -373,7 +477,6 @@ private:
                 throw logic_error("rpc_ae's entry size is bigger 1");
             }
         }
-        Log_debug << "done receive AE: " << rpc_ae2str(rpc_ae);
     }
 
     //begin from here
@@ -423,7 +526,6 @@ private:
                 make_resp_rv(false, "react2rv: No votes left this term", server, rpc_lsn);
             }
         }
-        Log_debug << "done: received RV: " << rpc_rv2str(rpc_rv);
     }
 
     void react2resp_ae(Resp_AppendEntryRpc &resp_ae) {
@@ -458,8 +560,6 @@ private:
                 candidate_deal_resp_rv_with_same_term(server, resp_rv);
             }
         }
-        Log_debug << "done: the resp_ae received is :" << resp_rv2str(resp_rv);
-
     }
 
 private:
@@ -475,7 +575,6 @@ private:
         resp_vote.SerializeToString(&msg);
         Log_debug << "the resp_rv to send is: " << resp_rv2str(resp_vote);
         writeTo(server, to_string(RESP_VOTE) + msg);
-        Log_trace << "done";
     }
 
     void make_resp_ae(bool ok, string context_log, tuple<string, int> server, int lsn) {
@@ -491,7 +590,6 @@ private:
         string msg;
         resp_entry.SerializeToString(&msg);
         writeTo(server, to_string(RESP_APPEND) + msg);
-        Log_trace << "done";
     }
 
 private: //helper functions, react2rv and react2ae is very simple in some situations (like term_ < remote), but some situations really wants deal(like for resp2rv a vote is granted), we deal them here
@@ -501,12 +599,42 @@ private: //helper functions, react2rv and react2ae is very simple in some situat
 
         int resp_lsn = resp_ae.lsn();
         int current_rpc_lsn = current_rpc_lsn_[server];
+        current_rpc_lsn_[server] = current_rpc_lsn + 1;
+
+        //todo
+        //todo
+        //todo
+        //todo
+        //todo
+        //todo
+        //todo
+        //todo
+        //todo
+        //todo
+        //todo
+        //todo
+        //todo
+        //todo
+        //todo
+        //todo
+        //todo
+        //todo
+        //todo
+        //todo
+        //todo
+        //todo
+        //todo
+        //todo
+        //todo
+        //todo
         if (current_rpc_lsn != resp_lsn) {
             return;
         } else {
             bool ok = resp_ae.ok();
             if (ok) {
-                int last_send_index = nextIndex_[server];
+                int last_send_index = nextIndex_[server]; //todo bug de it!
+                Log_debug << "last_send_index: " << last_send_index;
+                Log_debug << "entries.size(): " << entries_.size();
                 if (last_send_index > entries_.size()) {
 //                    don't nextIndex_[server] = last_send_index + 1;
                 } else {
@@ -516,12 +644,16 @@ private: //helper functions, react2rv and react2ae is very simple in some situat
 
                 // whether send next entry immediately is determined by primary_deal_resp_ae, but whether to build an empty ae is determinde by AE()
                 if (last_send_index > entries_.size()) {
+                    Log_debug << "here1!";
                     // > , we don't send next index immediately, let the timers expires and send empty rps_ae as heartbeat, that situation 2 in AE()
                 } else {
                     primary_update_commit_index(server, last_send_index);
                     if (last_send_index == entries_.size()) {
+                        Log_debug << "here2!";
+
                         // = , we don't send next index immediately, let the timers expires and send empty rps_ae as heartbeat, that situation 2 in AE()
                     } else {
+                        Log_debug << "here3!";
                         //cancel timer todo check hook num
                         retry_timers_[server]->get_core().cancel();
                         // immediately the next AE
@@ -547,7 +679,6 @@ private: //helper functions, react2rv and react2ae is very simple in some situat
 
             }
         }
-        Log_trace << "done";
     }
 
     // candidate deal with resp_rv with the same term (because other resp_rv situation is simple, only this one needs a little logic)
@@ -555,9 +686,12 @@ private: //helper functions, react2rv and react2ae is very simple in some situat
         Log_trace << "begin";
         int resp_lsn = resp_rv.lsn();
         int current_rpc_lsn = current_rpc_lsn_[server];
-        if (current_rpc_lsn != resp_lsn) {
+        current_rpc_lsn_[server] = current_rpc_lsn + 1;
+        if (current_rpc_lsn != resp_lsn + 1) {
+            Log_debug << "received resp_rv lsn: " << resp_lsn << ", current_lsn: " << current_rpc_lsn << ", not equal, deny!";
             return;
         } else {
+            Log_debug << "received resp_rv lsn: " << resp_lsn << ", current_lsn: " << current_rpc_lsn << "equal, the rpc is valid";
             bool ok = resp_rv.ok();
             if (ok) {
                 winned_votes_++;
@@ -565,14 +699,13 @@ private: //helper functions, react2rv and react2ae is very simple in some situat
                     trans2P();
                 } else {
                     // cancel the timer, if receive votes, we no longer need to rv more this term
-                    shared_ptr<Timer> timer = retry_timers_[server];
-                    timer->get_core().cancel();
+                    shared_ptr <Timer> timer = retry_timers_[server];
+                    timer->get_core().expires_at(boost::posix_time::min_date_time);
                 }
             } else {
                 // this mean remote follower has already voted for other candidate with the same term, just do nothing and let candidate_timer expires to enter the next term candidate
             }
         }
-        Log_trace << "done";
     }
 
 private:
@@ -621,6 +754,7 @@ private:
     int winned_votes_;
     //可以设置为bool，因为raft规定一个term只能一个主, 考虑这种情况，candidate发出了rv，但是所有f只能接受rv，不能发会resp_rv,但是我的设定中f在收到相同term的rv时不会重传，因为c会自动增加term再rv，只有收到了更高term的rv，f才会resp，所以这里只用bool就够了
     bool already_voted_;
+    std::tuple<string, int> known_primary_; //todo
 
     //normal
     int term_;

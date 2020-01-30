@@ -62,6 +62,9 @@ const rpc_Entry &Entries::get(int index) {
     return entries_[index];
 }
 
+void Entries::append(const rpc_Entry &entry) {
+    insert(size_, entry);
+}
 
 void Entries::insert(unsigned int index, const rpc_Entry &entry) {
     if (index > size_) {

@@ -9,7 +9,7 @@ using std::string;
 using boost::asio::ip::tcp;
 using namespace boost::asio;
 enum RPC_TYPE {
-    REQUEST_VOTE, APPEND_ENTRY, RESP_VOTE, RESP_APPEND, ERROR
+    REQUEST_VOTE, APPEND_ENTRY, RESP_VOTE, RESP_APPEND, CLIENT_APPEND, ERROR
 };
 
 class RPC {
