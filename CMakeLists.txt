@@ -49,6 +49,7 @@ else ()
     protobuf_generate(TARGET raft)
 endif ()
 
+#add_executable(test_read_file tests/test_read_file.cpp)
 
 #add_executable(test_map_insert tests/test_map_insert.cpp)
 

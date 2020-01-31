@@ -4,7 +4,7 @@ void init_logging(int port) {
     logging::register_simple_formatter_factory<logging::trivial::severity_level, char>("Severity");
 
     logging::add_file_log(
-            keywords::file_name = "raft_" + std::to_string(port) + ".log",
+            keywords::file_name = "log" + std::to_string(port),
             keywords::format = "[%TimeStamp%] [%Severity%] [%LineID%] %Message%",
             keywords::auto_flush = true
     );

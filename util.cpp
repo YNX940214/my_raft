@@ -11,10 +11,18 @@
 #include "rpc.pb.h"
 #include <sstream>
 #include <boost/asio.hpp>
+#include <vector>
+#include <boost/algorithm/string.hpp>
+
 
 #define DEBUG_FACTOR 1;
 using std::string;
 
+std::vector<string> split_str_boost(const string &str, char delim) {
+    std::vector<std::string> results;
+    boost::split(results, str, [delim](char c) { return c == delim; });
+    return results;
+}
 
 int random_candidate_expire() {
     int max = 300 * DEBUG_FACTOR;
@@ -128,5 +136,6 @@ string resp_rv2str(const raft_rpc::Resp_RequestVoteRpc &resp) {
     string s = oss.str();
     return s;
 }
+
 
 #endif //RAFT_UTIL_H

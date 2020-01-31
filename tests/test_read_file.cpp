@@ -1,13 +1,25 @@
+#include <iostream>
 #include <fstream>
+#include <vector>
+
+
 
 int main() {
-    const char *path = "789.config";
-    if ((file_fd_ = open(path, O_RDWR)) == -1) {
-        std::ostringstream oss;
-        oss << "无法打开配置文件: " << path;
-        string s = oss.str();
-        throw std::logic_error(s);
+    ifstream in("789.config");
+    if (!in) {
+        cout << "Cannot open input file.\n";
+        return 1;
     }
+    char str[255];
+    while (in) {
+        in.getline(str, 255);  // delim defaults to '\n'
+        if (in) cout << str << endl;
+        auto vec = split_str(str, ':');
+        if (vec.size() != 2) {
+            throw std::logic_error(string("failed to read the config file line: ") + str);
+        }
+    }
+    in.close();
 
-
+    return 0;
 }

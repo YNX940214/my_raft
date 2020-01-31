@@ -9,6 +9,8 @@
 #include "rpc.pb.h"
 #include "entry/entry.h"
 #include "Timer.h"
+#include <vector>
+#include <fstream>
 
 using namespace boost::asio;
 using namespace std;
@@ -22,7 +24,7 @@ enum State {
 //4。根据commitIndex把entry apply到state machine的独立线程，注意这个线程只能读commitIndex不能改
 class instance {
 public:
-    instance(io_service &loop, const string &_ip, int _port, const tcp::endpoint &_endpoint) :
+    instance(io_service &loop, const string &_ip, int _port, const tcp::endpoint &_endpoint, string config_path) :
             ip_(_ip),
             port_(_port),
             server_(_ip, _port),
@@ -34,7 +36,8 @@ public:
             commit_index_(-1),
             network_(loop, _endpoint, std::bind(&instance::reactToIncomingMsg, this, std::placeholders::_1, std::placeholders::_2)),
 //            state_machine_(),
-            winned_votes_(0) {
+            winned_votes_(0),
+            config_path_(config_path) {
         load_config_from_file();
         for (const auto &server_tuple: configuration_) {
             nextIndex_[server_tuple] = -1; // -1 not 0, because at the beginning, entries[0] raise Exception,
@@ -83,13 +86,30 @@ public:
 private:
     //mock 一下先
     void load_config_from_file() {
-        configuration_ = {
-                {"127.0.0.1", 8888},
-                {"127.0.0.1", 7777},
-                {"127.0.0.1", 9999}
-        };
-        majority_ = 2;
-        N_ = 3;
+        std::ifstream in(config_path_);
+        if (!in) {
+            cout << "Cannot open config file: " << config_path_ << endl;
+            throw std::logic_error("read config file failed");
+        }
+
+        char str[255];
+        while (in) {
+            in.getline(str, 255);
+            if (string(str).size() == 0)  //丑陋，不过在同一台电脑上在clion上运行居然和在bash里面运行结果一样，奇怪
+                break;
+            auto vec = split_str_boost(str, ':');
+            cout << "the size is: " << vec.size() << endl;
+            if (vec.size() != 2) {
+                throw std::logic_error(string("failed to read the config file line: ") + str);
+            }
+            int port = std::atoi(vec[1].c_str());
+            cout << "read config line: " << vec[0] << ":" << vec[1] << endl;
+            auto server = std::make_tuple(vec[0], port);
+            configuration_.push_back(server);
+        }
+        in.close();
+        N_ = configuration_.size();
+        majority_ = N_ / 2 + 1;
     }
 
     void cancel_all_timers() {
@@ -271,7 +291,7 @@ private:
 
     void AE(const tuple<string, int> &server) {
         Log_debug << "begin";
-        shared_ptr <Timer> t1 = retry_timers_[server];
+        shared_ptr<Timer> t1 = retry_timers_[server];
 
         string ae_rpc_str = build_rpc_ae_string(server);
         AppendEntryRpc ae;
@@ -335,7 +355,7 @@ private:
 
     void RV(const tuple<string, int> &server) {
         Log_debug << "begin: server: " << server2str(server);
-        shared_ptr <Timer> timer = retry_timers_[server];
+        shared_ptr<Timer> timer = retry_timers_[server];
 
         string rv_rpc_str = build_rpc_rv_string(server);
         RequestVoteRpc rv;
@@ -662,7 +682,7 @@ private: //helper functions, react2rv and react2ae is very simple in some situat
                     trans2P();
                 } else {
                     // cancel the timer, if receive votes, we no longer need to rv more this term
-                    shared_ptr <Timer> timer = retry_timers_[server];
+                    shared_ptr<Timer> timer = retry_timers_[server];
                     timer->get_core().expires_at(boost::posix_time::min_date_time);
                 }
             } else {
@@ -717,6 +737,8 @@ private:
     //可以设置为bool，因为raft规定一个term只能一个主, 考虑这种情况，candidate发出了rv，但是所有f只能接受rv，不能发会resp_rv,但是我的设定中f在收到相同term的rv时不会重传，因为c会自动增加term再rv，只有收到了更高term的rv，f才会resp，所以这里只用bool就够了
     bool already_voted_;
     std::tuple<string, int> known_primary_; //todo
+    string config_path_;
+
 
     //normal
     int term_;
@@ -735,7 +757,7 @@ private:
 
     //timers
     deadline_timer candidate_timer_;
-    map <std::tuple<string, int>, shared_ptr<Timer>> retry_timers_;
+    map<std::tuple<string, int>, shared_ptr<Timer>> retry_timers_;
 
     // log & state machine
     int commit_index_;
@@ -747,11 +769,12 @@ private:
 
 int main(int argc, char **argv) {
     try {
-        int _port = atoi(argv[1]);
+        int _port = atoi(argv[2]);
+        string config_path = string(argv[1]);
         init_logging(_port);
         boost::asio::io_service io;
         tcp::endpoint _endpoint(tcp::v4(), _port);
-        instance raft_instance(io, "127.0.0.1", _port, _endpoint);
+        instance raft_instance(io, "127.0.0.1", _port, _endpoint, config_path);
         raft_instance.run();
     } catch (std::exception &exception) {
         Log_fatal << "exception: " << exception.what();
