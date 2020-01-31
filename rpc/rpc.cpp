@@ -16,7 +16,7 @@ RPC::RPC(boost::asio::io_context &io, const tcp::endpoint &endpoint, std::functi
 }
 
 
-inline void RPC::add_header_then_write_and_hook(std::shared_ptr<tcp::socket> sp, const string &msg) {
+inline void RPC::add_header_then_write_and_hook(std::shared_ptr<tcp::socket> sp, const string &msg, const std::tuple<string, int> &server) {
     Log_trace << "begin";
     char header[4 + 1] = "";
     int msg_len = msg.length();
@@ -25,10 +25,14 @@ inline void RPC::add_header_then_write_and_hook(std::shared_ptr<tcp::socket> sp,
     memcpy(send_buffer, header, 4);
     memcpy(send_buffer + 4, msg.c_str(), msg_len);
 
-    boost::asio::async_write(*sp, boost::asio::buffer(send_buffer, msg_len + 4), [](const boost::system::error_code &error, std::size_t bytes_transferred) {
+    boost::asio::async_write(*sp, boost::asio::buffer(send_buffer, msg_len + 4), [this, server](const boost::system::error_code &error, std::size_t bytes_transferred) {
         Log_trace << "[begin] handler in add_header_then_write_and_hook exipired, error: " << error.message();
-        //write succeed, do nothing
-        Log_trace << "[done] handler in add_header_then_write_and_hook exipired, error: " << error.message();
+        if (error) {
+            Log_error << "handler in RPC::add_header_then_write_and_hook's async_write failed, error: " << error.message();
+            client_sockets_.erase(server);
+        } else {
+            Log_trace << "handler in RPC::add_header_then_write_and_hook's async_write succeeded, error: " << error.message();
+        }
     });
     Log_trace << "done";
 }
@@ -40,7 +44,7 @@ void RPC::writeTo(const std::tuple<string, int> &server, const string &rpc_msg, 
         auto sp = client_sockets_[server];
         if (sp) {
             Log_debug << "sp debug: sp is NOT null, server: " << server2str(server) << "local endpoint: " << sp->local_endpoint().address() << ":" << sp->local_endpoint().port();
-            add_header_then_write_and_hook(sp, rpc_msg);
+            add_header_then_write_and_hook(sp, rpc_msg, server);
         } else {
             Log_debug << "sp debug: sp is null";
 
@@ -57,7 +61,7 @@ void RPC::writeTo(const std::tuple<string, int> &server, const string &rpc_msg, 
                     client_sockets_[server] = sp;
                     Log_trace << "insert happened: " << server2str(server) << " with local endpoint: " << sp->local_endpoint().address() << ":" << sp->local_endpoint().port();
 //                    int rp = client_sockets_[server]->remote_endpoint().port();
-                    add_header_then_write_and_hook(sp, rpc_msg);
+                    add_header_then_write_and_hook(sp, rpc_msg, server);
                 }
             });
         }
@@ -107,7 +111,7 @@ void RPC::read_body(std::shared_ptr<tcp::socket> peer, const boost::system::erro
         Log_error << "error: " << error.message();
         if (error == boost::asio::error::eof) {
             Log_info << "connection from " << peer->remote_endpoint().address() << ":" << peer->remote_endpoint().port() << " is closed that side";
-        }else{
+        } else {
             throw std::logic_error(error.message());  //这是完全有可能的，比如对面关闭了进程，需要处理
         }
     } else {

@@ -126,6 +126,7 @@ private:
 private:
     void trans2F(int term) {
         Log_info << "begin";
+        cout << __FUNCTION__ << endl;
         cancel_all_timers();
         winned_votes_ = 0;
         term_ = term;
@@ -166,6 +167,7 @@ private:
 
     void trans2P() {
         Log_info << "begin";
+        cout << __FUNCTION__ << endl;
         cancel_all_timers();
         state_ = primary;
         for (const auto &server : configuration_) {
@@ -179,6 +181,7 @@ private:
 
     void trans2C() {
         Log_info << "begin";
+        cout << __FUNCTION__ << endl;
         /*
          * candidate can trans 2 candidate, we need to cancel the timer
          * 刚跑起来的时候这里有个bug，rv的重传超时设置成了秒，这导致trans2candidate的时候，rv的timer还没有超时，所以再次set timer expire的时候检查hook数目不为0，属于一个被遗漏的bug，但找到后修复了，但是这

@@ -33,7 +33,7 @@ private:
 
     void body_callback(std::shared_ptr<tcp::socket> peer, const boost::system::error_code &error, size_t bytes_transferred);
 
-    void add_header_then_write_and_hook(std::shared_ptr<tcp::socket> sp, const string &rpc_msg);
+    void add_header_then_write_and_hook(std::shared_ptr<tcp::socket> sp, const string &rpc_msg, const std::tuple<string, int> &server);
 
 public:
 
