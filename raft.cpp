@@ -64,7 +64,7 @@ public:
                         std::ostringstream oss;
                         oss << "handler in run's candidate_timer, error: " << error.message();
                         string str = oss.str();
-                        throw (str);
+                        throw std::logic_error(str);
                     }
                 } else {
                     auto expire_time = candidate_timer_.expires_at();
@@ -268,7 +268,7 @@ private:
 
     void AE(const tuple<string, int> &server) {
         Log_debug << "begin";
-        shared_ptr<Timer> t1 = retry_timers_[server];
+        shared_ptr <Timer> t1 = retry_timers_[server];
 
         string ae_rpc_str = build_rpc_ae_string(server);
         AppendEntryRpc ae;
@@ -332,7 +332,7 @@ private:
 
     void RV(const tuple<string, int> &server) {
         Log_debug << "begin: server: " << server2str(server);
-        shared_ptr<Timer> timer = retry_timers_[server];
+        shared_ptr <Timer> timer = retry_timers_[server];
 
         string rv_rpc_str = build_rpc_rv_string(server);
         RequestVoteRpc rv;
@@ -599,84 +599,45 @@ private: //helper functions, react2rv and react2ae is very simple in some situat
 
         int resp_lsn = resp_ae.lsn();
         int current_rpc_lsn = current_rpc_lsn_[server];
-        current_rpc_lsn_[server] = current_rpc_lsn + 1;
-
-        //todo
-        //todo
-        //todo
-        //todo
-        //todo
-        //todo
-        //todo
-        //todo
-        //todo
-        //todo
-        //todo
-        //todo
-        //todo
-        //todo
-        //todo
-        //todo
-        //todo
-        //todo
-        //todo
-        //todo
-        //todo
-        //todo
-        //todo
-        //todo
-        //todo
-        //todo
-        if (current_rpc_lsn != resp_lsn) {
+        if (current_rpc_lsn != resp_lsn + 1) {
             return;
         } else {
             bool ok = resp_ae.ok();
+            int last_send_index = nextIndex_[server];
             if (ok) {
-                int last_send_index = nextIndex_[server]; //todo bug de it!
                 Log_debug << "last_send_index: " << last_send_index;
                 Log_debug << "entries.size(): " << entries_.size();
-                if (last_send_index > entries_.size()) {
-//                    don't nextIndex_[server] = last_send_index + 1;
+                // whether send next entry immediately is determined by primary_deal_resp_ae, but whether to build an empty ae is determinde by AE()
+                if (last_send_index > entries_.size() || last_send_index < 0) {
+                    //don't nextIndex_[server] = last_send_index + 1;
+                    Log_debug << "here1!";
+                    // > or -1 , we don't send next index immediately, let the timers expires and send empty rps_ae as heartbeat, that situation 2 in AE()
                 } else {
                     nextIndex_[server] = last_send_index + 1;
-                }
-
-
-                // whether send next entry immediately is determined by primary_deal_resp_ae, but whether to build an empty ae is determinde by AE()
-                if (last_send_index > entries_.size()) {
-                    Log_debug << "here1!";
-                    // > , we don't send next index immediately, let the timers expires and send empty rps_ae as heartbeat, that situation 2 in AE()
-                } else {
+                    Log_debug << "primary's nextIndex of " << server2str(server) << " is set to " << nextIndex_[server];
                     primary_update_commit_index(server, last_send_index);
                     if (last_send_index == entries_.size()) {
                         Log_debug << "here2!";
-
                         // = , we don't send next index immediately, let the timers expires and send empty rps_ae as heartbeat, that situation 2 in AE()
                     } else {
                         Log_debug << "here3!";
-                        //cancel timer todo check hook num
-                        retry_timers_[server]->get_core().cancel();
+                        retry_timers_[server]->get_core().expires_at(boost::posix_time::min_date_time);
                         // immediately the next AE
                         AE(server);
                     }
                 }
             } else {
-                /* ok == false, but there may be many possibilities, like remote server encouter disk error, what should it do(one way is just crash, no response, so primary will not push back the index to send)
-                 * so we must ensure !!!!!!!!!!!!! the remote return resp_ae( ok =false ) only in one situation, that prev_index != rpc_index -1, any other (disk failure, divide 0) will nerver return false! just crash it.
+                /* ok == false, but there may be many possibilities, like remote server encouters disk error, what should it do(one way is just crash, no response, so primary will not push back the index to send)
+                 * so we must ensure !!!!!!!!!!!!! the remote return resp_ae( ok =false ) only in one situation, that prev_index(stored remote) != rpc_index(in AE) -1, any other (disk failure, divide 0) will never return false! just crash it.
                  */
-                int last_send_index = nextIndex_[server];
                 if (last_send_index <= 0) {
                     // don't nextIndex_[server] = last_send_index - 1;
-                } else {
-                    nextIndex_[server] = last_send_index - 1;
-                }
-                if (last_send_index <= 0) {
                     // do nothing, let the timers expires
                 } else {
+                    nextIndex_[server] = last_send_index - 1;
                     retry_timers_[server]->get_core().cancel();
                     AE(server);
                 }
-
             }
         }
     }
@@ -686,7 +647,6 @@ private: //helper functions, react2rv and react2ae is very simple in some situat
         Log_trace << "begin";
         int resp_lsn = resp_rv.lsn();
         int current_rpc_lsn = current_rpc_lsn_[server];
-        current_rpc_lsn_[server] = current_rpc_lsn + 1;
         if (current_rpc_lsn != resp_lsn + 1) {
             Log_debug << "received resp_rv lsn: " << resp_lsn << ", current_lsn: " << current_rpc_lsn << ", not equal, deny!";
             return;
@@ -719,7 +679,8 @@ private:
             temp_sort[i] = ele.second;
         }
         std::reverse(temp_sort.begin(), temp_sort.end());
-        commit_index_ = temp_sort[majority_];
+        commit_index_ = temp_sort[majority_ - 1];
+        Log_debug << "set committed index to " << commit_index_;
         Log_trace << "done: server: " << server2str(server) << ", index: " << index;
     }
 
@@ -738,7 +699,6 @@ private:
     }
 
     void writeTo(const tuple<string, int> &server, const string &msg) {
-//        在这里写个函数将msg print解析一下看看是不是真确的 todo
         Log_trace << "begin: server: " << server2str(server);
         network_.writeTo(server, msg, std::bind(&instance::deal_with_write_error, this, std::placeholders::_1, std::placeholders::_2));
         Log_trace << "done: server: " << server2str(server);
@@ -746,7 +706,6 @@ private:
     }
 
     void deal_with_write_error(boost::system::error_code &ec, std::size_t) {
-        //todo consider what to do when write failed, (maybe not nothing, because a write failed may means network unreachable, let the retry mechanism to deal with it)
         Log_error << " error: " << ec.message();
     }
 
@@ -773,7 +732,7 @@ private:
 
     //timers
     deadline_timer candidate_timer_;
-    map<std::tuple<string, int>, shared_ptr<Timer>> retry_timers_;
+    map <std::tuple<string, int>, shared_ptr<Timer>> retry_timers_;
 
     // log & state machine
     int commit_index_;

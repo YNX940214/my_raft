@@ -129,7 +129,6 @@ void RPC::body_callback(std::shared_ptr<tcp::socket> peer, const boost::system::
         Log_error << "error: " << error.message();
 //        peer.cancel() or close()?
     } else {
-        //todo 这里换成1byte了，但是代码仍然是4byte
         unsigned int len_type = 1;
         char char_rpc_type[1] = "";
         memcpy(char_rpc_type, big_char, len_type);
