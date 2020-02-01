@@ -20,13 +20,13 @@ enum State {
     follower, candidate, primary
 };
 
-//3. 先把程序跑起来，做出第一次选举。
 //4。根据commitIndex把entry apply到state machine的独立线程，注意这个线程只能读commitIndex不能改
 class instance {
 public:
     instance(io_service &loop, const string &_ip, int _port, const tcp::endpoint &_endpoint, string config_path) :
             ip_(_ip),
             port_(_port),
+            entries_(_port),
             server_(_ip, _port),
             ioContext(loop),
             term_(0),

@@ -22,8 +22,8 @@ using std::logic_error;
 using std::ifstream;
 using std::ofstream;
 
-Entries::Entries() : data_(Consts::data_path) {
-    path_offset_ = Consts::offset_path;
+Entries::Entries(int port) : data_(string(Consts::data_path) + string(".") + std::to_string(port)) {
+    path_offset_ = string(Consts::offset_path) + string(".") + std::to_string(port);
     if (!file_exists(path_offset_.c_str())) {
         //needn't open the file, open it before flush
         offset_.push_back(0);

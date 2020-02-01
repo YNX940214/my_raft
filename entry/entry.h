@@ -18,7 +18,7 @@ using raft_rpc::rpc_Entry;
 
 class Entries {
 public:
-    Entries();
+    Entries(int port);
 
     const rpc_Entry &get(int index);
 
