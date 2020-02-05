@@ -7,6 +7,7 @@
 
 #include "rpc.pb.h"
 #include <boost/asio.hpp>
+#include "./log/boost_lop.h"
 
 #define Log_trace       BOOST_LOG_TRIVIAL(trace) << __FILE__ << " [" << __FUNCTION__ << "] "
 #define Log_debug       BOOST_LOG_TRIVIAL(debug) << __FILE__ << " [" << __FUNCTION__ << "] "
@@ -30,16 +31,10 @@ bool file_exists(const string &path);
 
 string server2str(const std::tuple<string, int> &server);
 
-std::tuple<string, int> get_peer_server_tuple(std::shared_ptr <boost::asio::ip::tcp::socket> peer);
+std::tuple<string, int> get_peer_ip_port(std::shared_ptr<boost::asio::ip::tcp::socket> peer);
 
-string rpc_ae2str(const raft_rpc::AppendEntryRpc &ae);
 
-string rpc_rv2str(const raft_rpc::RequestVoteRpc &rv);
 
-string resp_ae2str(const raft_rpc::Resp_AppendEntryRpc &resp);
-
-string resp_rv2str(const raft_rpc::Resp_RequestVoteRpc &resp);
-
-std::vector <string> split_str_boost(const string &s, char delim);
+std::vector<string> split_str_boost(const string &s, char delim);
 
 #endif //RAFT_UTIL_H

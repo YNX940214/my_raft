@@ -1,0 +1,20 @@
+syntax = "proto3";
+package easy_state_machine;
+
+message apply_call {
+    string key = 1;
+    int32 v = 2;
+}
+
+message query_call {
+    string key = 1;
+}
+
+message resp_apply {
+    bool ok = 1;
+}
+
+message resp_query {
+    bool ok = 1;
+    int32 v = 2;
+}

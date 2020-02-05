@@ -4,20 +4,36 @@
 #include <boost/asio.hpp>
 #include <functional>
 #include <map>
+#include "../rpc.pb.h"
 
 using std::string;
 using boost::asio::ip::tcp;
 using namespace boost::asio;
+using namespace raft_rpc;
 enum RPC_TYPE {
-    REQUEST_VOTE, APPEND_ENTRY, RESP_VOTE, RESP_APPEND, CLIENT_APPEND, ERROR
+    REQUEST_VOTE, APPEND_ENTRY, RESP_VOTE, RESP_APPEND, CLIENT_APPLY, CLIENT_QUERY, RESP_CLIENT_APPLY, RESP_CLIENT_QUERY, ERROR
 };
 
 class RPC {
 public:
     RPC(boost::asio::io_context &io, const tcp::endpoint &endpoint, std::function<void(RPC_TYPE, string)> cb);
 
-    void writeTo(const std::tuple<string, int> &server, const string &rpc_msg, std::function<void(boost::system::error_code &ec, std::size_t)> cb); //cb为callback，在RPC::writeTo中根据成功/失败执行下一步动作
     void startAccept();
+
+    void make_rpc_call(RPC_TYPE rpc_type, const std::tuple<string, int> &server, const string &rpc_msg, std::function<void(boost::system::error_code &ec, std::size_t)> cb); //cb为callback，在RPC::writeTo中根据成功/失败执行下一步动作,
+
+    void make_rpc_call(RPC_TYPE rpc_type, std::shared_ptr<tcp::socket> socket, const string &rpc_msg, std::function<void(boost::system::error_code &ec, std::size_t)> cb); //重载，this is for responses to client (RESP_CLIENT_APPLY, RESP_CLIENT_QUERY)
+
+
+    string rpc_ae2str(const AppendEntryRpc &ae);
+
+    string rpc_rv2str(const RequestVoteRpc &rv);
+
+    string resp_ae2str(const Resp_AppendEntryRpc &resp);
+
+    string resp_rv2str(const Resp_RequestVoteRpc &resp);
+
+    string rpc_to_str(RPC_TYPE type, const string &rpc_str);
 
 private:
 
@@ -43,7 +59,7 @@ private:
     };
 
     std::map<std::tuple<string, int>, std::shared_ptr<tcp::socket>> client_sockets_;
-    std::function<void(RPC_TYPE, string msg)> cb_;
+    std::function<void(RPC_TYPE, string msg, std::shared_ptr<tcp::socket>)> cb_;
     char big_char[max_body_length];
     char meta_char[4];
 //    std::map<std::tuple<string, int>, std::shared_ptr<tcp::socket>> _connection_map;

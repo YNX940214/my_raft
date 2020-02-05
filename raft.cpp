@@ -11,6 +11,8 @@
 #include "Timer.h"
 #include <vector>
 #include <fstream>
+#include "state_machine/StateMachineControler.h"
+#include "state_machine/StateMachine.h"
 
 using namespace boost::asio;
 using namespace std;
@@ -23,7 +25,7 @@ enum State {
 //4。根据commitIndex把entry apply到state machine的独立线程，注意这个线程只能读commitIndex不能改
 class instance {
 public:
-    instance(io_service &loop, const string &_ip, int _port, const tcp::endpoint &_endpoint, string config_path) :
+    instance(io_service &loop, const string &_ip, int _port, const tcp::endpoint &_endpoint, string config_path, StateMachine *sm) :
             ip_(_ip),
             port_(_port),
             entries_(_port),
@@ -34,10 +36,11 @@ public:
             already_voted_(false),
             candidate_timer_(loop),
             commit_index_(-1),
-            network_(loop, _endpoint, std::bind(&instance::reactToIncomingMsg, this, std::placeholders::_1, std::placeholders::_2)),
+            network_(loop, _endpoint, std::bind(&instance::reactToIncomingMsg, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3)),
 //            state_machine_(),
             winned_votes_(0),
-            config_path_(config_path) {
+            config_path_(config_path),
+            smc_(sm, &entries_, client_sockets_map_, ioContext) {
         load_config_from_file();
         for (const auto &server_tuple: configuration_) {
             nextIndex_[server_tuple] = -1; // -1 not 0, because at the beginning, entries[0] raise Exception,
@@ -282,23 +285,17 @@ private:
         } else if (index_to_send <= 0) {
             rpc.set_prelog_term(-1);
         }
-
-        Log_debug << rpc_ae2str(rpc);
         string msg;
         rpc.SerializeToString(&msg);
-        return to_string(APPEND_ENTRY) + msg;
+        return msg;
     }
 
     void AE(const tuple<string, int> &server) {
         Log_debug << "begin";
         shared_ptr<Timer> t1 = retry_timers_[server];
-
         string ae_rpc_str = build_rpc_ae_string(server);
-        AppendEntryRpc ae;
-        ae.ParseFromString(ae_rpc_str.substr(1));
-        Log_debug << "build rpc_AE to " << server2str(server) << ":" << rpc_ae2str(ae);
-        writeTo(server, ae_rpc_str);   //考虑如下场景，发了AE1,index为100,然后定时器到期重发了AE2,index为100，这时候收到ae1的resp为false，将index--,如果ae2到F，又触发了一次resp，这两个rpc的请求一样，resp一样，但是P收到两个一样的resp会将index--两次，所以需要rpc_lsn的存在
-
+        //考虑如下场景，发了AE1,index为100,然后定时器到期重发了AE2,index为100，这时候收到ae1的resp为false，将index--,如果ae2到F，又触发了一次resp，这两个rpc的请求一样，resp一样，但是P收到两个一样的resp会将index--两次，所以需要rpc_lsn的存在
+        writeTo(APPEND_ENTRY, server, ae_rpc_str);
 
         int waiting_counts = t1->get_core().expires_from_now(boost::posix_time::milliseconds(random_ae_retry_expire()));
         if (waiting_counts != 0) {
@@ -350,7 +347,7 @@ private:
         rpc.set_port(port_);
         string msg;
         rpc.SerializeToString(&msg);
-        return to_string(REQUEST_VOTE) + msg;
+        return msg;
     }
 
     void RV(const tuple<string, int> &server) {
@@ -358,10 +355,7 @@ private:
         shared_ptr<Timer> timer = retry_timers_[server];
 
         string rv_rpc_str = build_rpc_rv_string(server);
-        RequestVoteRpc rv;
-        rv.ParseFromString(rv_rpc_str.substr(1));
-        Log_debug << "build rpc_rv to " << server2str(server) << ":" << rpc_rv2str(rv);
-        writeTo(server, rv_rpc_str);
+        writeTo(REQUEST_VOTE, server, rv_rpc_str);
         int waiting_counts = timer->get_core().expires_from_now(boost::posix_time::milliseconds(random_rv_retry_expire()));
         if (waiting_counts != 0) {
             /*
@@ -402,7 +396,7 @@ private:
     }
 
 private:
-    void reactToIncomingMsg(RPC_TYPE _rpc_type, const string msg) {
+    void reactToIncomingMsg(RPC_TYPE _rpc_type, const string msg, std::shared_ptr<tcp::socket> client_socket_sp) {
         Log_debug << "begin: RPC_TYPE: " << _rpc_type;
         if (_rpc_type == REQUEST_VOTE) {
             RequestVoteRpc rv;
@@ -420,15 +414,28 @@ private:
             Resp_AppendEntryRpc resp_ae;
             resp_ae.ParseFromString(msg);
             react2resp_ae(resp_ae);
-        } else if (_rpc_type == CLIENT_APPEND) {
-
+        } else if (_rpc_type == CLIENT_APPLY) {
+            append_client_apply_to_entries(client_socket_sp, msg);
+        } else if (_rpc_type == CLIENT_QUERY) {
+            get_from_state_machine(client_socket_sp, msg);
         } else {
             Log_error << "unknown action";
         }
     }
 
-    void client_append(string) {
+    void get_from_state_machine(std::shared_ptr<tcp::socket> client_peer, string client_query_str) {
+        smc_.get_from_state_machine(client_query_str, client_peer);
+    }
 
+    void append_client_apply_to_entries(std::shared_ptr<tcp::socket> client_peer, string apply_str) {
+        Log_trace << "begin";
+        rpc_Entry entry;
+        int index = entries_.size();
+        client_sockets_map_[index] = client_peer;
+        entry.set_term(term_);
+        entry.set_index(index);
+        entry.set_msg(apply_str);
+        entries_.insert(index, entry);
     }
 
     void react2ae(AppendEntryRpc rpc_ae) {
@@ -596,8 +603,7 @@ private:
         resp_vote.set_port(port_);
         string msg;
         resp_vote.SerializeToString(&msg);
-        Log_debug << "the resp_rv to send is: " << resp_rv2str(resp_vote);
-        writeTo(server, to_string(RESP_VOTE) + msg);
+        writeTo(RESP_VOTE, server, to_string(RESP_VOTE) + msg);
     }
 
     void make_resp_ae(bool ok, string context_log, tuple<string, int> server, int lsn) {
@@ -608,12 +614,11 @@ private:
         resp_entry.set_lsn(lsn);
         resp_entry.set_ip(ip_);
         resp_entry.set_port(port_);
-        Log_debug << "the resp_ae to send is: " << resp_ae2str(resp_entry);
-
         string msg;
         resp_entry.SerializeToString(&msg);
-        writeTo(server, to_string(RESP_APPEND) + msg);
+        writeTo(RESP_APPEND, server, msg);
     }
+
 
 private: //helper functions, react2rv and react2ae is very simple in some situations (like term_ < remote), but some situations really wants deal(like for resp2rv a vote is granted), we deal them here
     // this is term_ == remote term, otherwise we deal somewhere else(actually just deny or trans2F)
@@ -692,6 +697,16 @@ private: //helper functions, react2rv and react2ae is very simple in some situat
     }
 
 private:
+    //todo follower modify commit_index and trigger apply_to_state_machine
+
+    void apply_to_state_machine(unsigned int new_commit_index) {
+        /*
+         * 希望有另一个线程（或者线程池）来进行state machine 的操作，返回string，再把string回传给io线程，然后io 线程通过shared_ptr写回 resp
+         * 需要注意shared_ptr的生命周期， client_modify_str对raft server是不感知的
+         */
+        smc_.update_commit_index_and_apply(new_commit_index);
+    }
+
     inline void primary_update_commit_index(const tuple<string, int> &server, int index) {
         Log_trace << "begin: server: " << server2str(server) << ", index: " << index;
         Follower_saved_index[server] = index;
@@ -704,7 +719,7 @@ private:
         std::reverse(temp_sort.begin(), temp_sort.end());
         commit_index_ = temp_sort[majority_ - 1];
         Log_debug << "set committed index to " << commit_index_;
-        Log_trace << "done: server: " << server2str(server) << ", index: " << index;
+        apply_to_state_machine(commit_index_);
     }
 
     inline void follower_update_commit_index(unsigned remote_commit_index, unsigned remote_prelog_index) {
@@ -721,11 +736,8 @@ private:
         Log_trace << "done: remote_commit_index: " << remote_commit_index << ", remote_prelog_index: " << remote_prelog_index;
     }
 
-    void writeTo(const tuple<string, int> &server, const string &msg) {
-        Log_trace << "begin: server: " << server2str(server);
-        network_.writeTo(server, msg, std::bind(&instance::deal_with_write_error, this, std::placeholders::_1, std::placeholders::_2));
-        Log_trace << "done: server: " << server2str(server);
-
+    void writeTo(RPC_TYPE rpc_type, const tuple<string, int> &server, const string &msg) {
+        network_.make_rpc_call(rpc_type, server, msg, std::bind(&instance::deal_with_write_error, this, std::placeholders::_1, std::placeholders::_2));
     }
 
     void deal_with_write_error(boost::system::error_code &ec, std::size_t) {
@@ -764,7 +776,12 @@ private:
     Entries entries_;
     map<tuple<string, int>, int> nextIndex_;
     map<tuple<string, int>, int> Follower_saved_index;
-//    StateMachine state_machine_; todo
+
+    //clients
+    map<unsigned int, std::shared_ptr<tcp::socket>> client_sockets_map_;
+    StateMachineControler smc_;  //定义在entries_和state_machine后面
+
+
 };
 
 int main(int argc, char **argv) {

@@ -26,13 +26,15 @@ add_executable(raft raft.cpp
         rpc.proto
         entry/entry.cpp
         entry/entry.h
-        #        StateMachine.cpp
-        #        StateMachine.h
         util.cpp
         entry/data.cpp
         entry/data.h
         Timer.cpp
-        Timer.h)
+        Timer.h
+        state_machine/StateMachine.h
+        state_machine/StateMachineControler.cpp
+        state_machine/StateMachineControler.h
+        state_machine/EasyStateMachine.cpp state_machine/EasyStateMachine.h client/client.cpp client/client.h)
 if (protobuf_MODULE_COMPATIBLE) #Legacy mode
     target_include_directories(raft PUBLIC ${PROTOBUF_INCLUDE_DIRS})
     target_link_libraries(raft ${PROTOBUF_LIBRARIES})
@@ -48,6 +50,11 @@ else ()
             ${Boost_SYSTEM_LIBRARY})
     protobuf_generate(TARGET raft)
 endif ()
+
+
+#add_executable(test_thread_pool state_machine/test_thread_pool.cpp)
+#add_executable(state_machine_controler state_machine/StateMachineControler.cpp)
+
 
 #add_executable(test_read_file tests/test_read_file.cpp)
 
