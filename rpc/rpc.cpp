@@ -90,6 +90,7 @@ string resp_rv2str(const Resp_RequestVoteRpc &resp) {
     return s;
 }
 
+
 string rpc_to_str(RPC_TYPE type, const string &rpc_str) {
     switch (type) {
         case REQUEST_VOTE: {
@@ -130,19 +131,49 @@ string rpc_to_str(RPC_TYPE type, const string &rpc_str) {
 }
 
 
-add header
-//to_string(APPEND_ENTRY) + to_string(REQUEST_VOTE) +
 void RPC::make_rpc_call(RPC_TYPE rpc_type, const std::tuple<string, int> &server, const string &rpc_msg, std::function<void(boost::system::error_code &ec, std::size_t)> cb) {
-    Log_debug << "making rpc to server " << server2str(server) << ", detail: " << rpc_to_str(rpc_)
+    Log_debug << "making rpc to server " << server2str(server) << ", detail: " << rpc_to_str(rpc_type, rpc_msg);
+    rpc_msg = std::to_string(rpc_type) + rpc_msg;
     try {
-        Log_debug << "geting server " << server2str(server) << "'s tcp sp";
         auto sp = client_sockets_[server];
         if (sp) {
             Log_debug << "sp debug: sp is NOT null, server: " << server2str(server) << "local endpoint: " << sp->local_endpoint().address() << ":" << sp->local_endpoint().port();
             add_header_then_write_and_hook(sp, rpc_msg, server);
         } else {
             Log_debug << "sp debug: sp is null";
+            string ip = std::get<0>(server);
+            int port = std::get<1>(server);
+            boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::address::from_string(ip), (unsigned short) port);
+            sp = std::make_shared<tcp::socket>(io_);
+            sp->async_connect(endpoint, [rpc_msg, sp, server, this](const boost::system::error_code &error) {
+                Log_trace << "begin handler in RPC::writeTo's async_connect, error: " << error.message();
+                if (error) {
+                    Log_error << "async_connect, error: " << error.message();
+                } else {
+                    Log_trace << "async_connect to: " << server2str(get_peer_ip_port(sp));
+                    client_sockets_[server] = sp;
+                    Log_trace << "insert happened: " << server2str(server) << " with local endpoint: " << sp->local_endpoint().address() << ":" << sp->local_endpoint().port();
+                    add_header_then_write_and_hook(sp, rpc_msg, server);
+                }
+            });
+        }
+    } catch (std::exception &exception) {
+        Log_error << "exception: " << exception.what();
+    }
+}
 
+
+void RPC::make_rpc_call(RPC_TYPE rpc_type, std::shared_ptr<tcp::socket> sp_socket, const string &rpc_msg, std::function<void(boost::system::error_code &ec, std::size_t)> cb) {
+    Log_debug << "making rpc to peer " << server2str(get_peer_ip_port(sp_socket)) << ", detail: " << rpc_to_str(rpc_type, rpc_msg);
+    rpc_msg = std::to_string(rpc_type) + rpc_msg;
+    try {
+        add_header_then_write_and_hook(sp_socket, rpc_msg,)
+        auto sp = client_sockets_[server];
+        if (sp) {
+            Log_debug << "sp debug: sp is NOT null, server: " << server2str(server) << "local endpoint: " << sp->local_endpoint().address() << ":" << sp->local_endpoint().port();
+            add_header_then_write_and_hook(sp, rpc_msg, server);
+        } else {
+            Log_debug << "sp debug: sp is null";
             string ip = std::get<0>(server);
             int port = std::get<1>(server);
             boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::address::from_string(ip), (unsigned short) port);
@@ -161,44 +192,9 @@ void RPC::make_rpc_call(RPC_TYPE rpc_type, const std::tuple<string, int> &server
             });
         }
     } catch (std::exception &exception) {
-        Log_error << "unconsidered exception: " << exception.what();
+        Log_error << "exception: " << exception.what();
     }
-    Log_trace << "done";
 }
-
-//void RPC::make_rpc_call(RPC_TYPE rpc_type, std::shared_ptr<tcp::socket> sp_socket, const string &rpc_msg, std::function<void(boost::system::error_code &ec, std::size_t)> cb) {
-//    Log_trace << "begin";
-//    try {
-//        Log_debug << "geting server " << server2str(server) << "'s tcp sp";
-//        auto sp = client_sockets_[server];
-//        if (sp) {
-//            Log_debug << "sp debug: sp is NOT null, server: " << server2str(server) << "local endpoint: " << sp->local_endpoint().address() << ":" << sp->local_endpoint().port();
-//            add_header_then_write_and_hook(sp, rpc_msg, server);
-//        } else {
-//            Log_debug << "sp debug: sp is null";
-//
-//            string ip = std::get<0>(server);
-//            int port = std::get<1>(server);
-//            boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::address::from_string(ip), (unsigned short) port);
-//            sp = std::make_shared<tcp::socket>(io_);
-//            sp->async_connect(endpoint, [rpc_msg, sp, server, this](const boost::system::error_code &error) {
-//                Log_trace << "begin handler in RPC::writeTo's async_connect, error: " << error.message();
-//                if (error) {
-//                    Log_error << "async_connect, error: " << error.message();
-//                } else {
-//                    Log_trace << "async_connect to: " << sp->remote_endpoint().address() << ":" << sp->remote_endpoint().port() << " local: " << sp->local_endpoint().address() << ":" << sp->local_endpoint().port();
-//                    client_sockets_[server] = sp;
-//                    Log_trace << "insert happened: " << server2str(server) << " with local endpoint: " << sp->local_endpoint().address() << ":" << sp->local_endpoint().port();
-////                    int rp = client_sockets_[server]->remote_endpoint().port();
-//                    add_header_then_write_and_hook(sp, rpc_msg, server);
-//                }
-//            });
-//        }
-//    } catch (std::exception &exception) {
-//        Log_error << "unconsidered exception: " << exception.what();
-//    }
-//    Log_trace << "done";
-//}
 
 
 tcp::socket RPC::getConnection(std::string ip, int port, std::function<void(boost::system::error_code &ec, std::size_t)> cb) {
