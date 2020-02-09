@@ -20,21 +20,18 @@ find_package(Boost COMPONENTS log log_setup serialization REQUIED)
 include_directories(${Boost_INCLUDE_DIRS})
 
 
-add_executable(raft raft.cpp
+add_executable(raft
+        main.cpp
         log/boost_lop.cpp
         rpc/rpc.cpp
         rpc.proto
         entry/entry.cpp
-        entry/entry.h
         util.cpp
         entry/data.cpp
-        entry/data.h
         Timer.cpp
-        Timer.h
-        state_machine/StateMachine.h
         state_machine/StateMachineControler.cpp
-        state_machine/StateMachineControler.h
-        state_machine/EasyStateMachine.cpp state_machine/EasyStateMachine.h client/client.cpp client/client.h)
+        state_machine/EasyStateMachine.cpp
+        RaftServer.cpp rpc/rpc_to_string.h rpc/rpc_to_string.cpp rpc/rpc_type.h rpc/SocketMap.cpp rpc/SocketMap.h)
 if (protobuf_MODULE_COMPATIBLE) #Legacy mode
     target_include_directories(raft PUBLIC ${PROTOBUF_INCLUDE_DIRS})
     target_link_libraries(raft ${PROTOBUF_LIBRARIES})

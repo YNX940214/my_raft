@@ -5,42 +5,27 @@
 #include <functional>
 #include <map>
 #include "../rpc.pb.h"
+#include "rpc_type.h"
+#include "SocketMap.h"
 
 using std::string;
 using boost::asio::ip::tcp;
 using namespace boost::asio;
 using namespace raft_rpc;
-enum RPC_TYPE {
-    REQUEST_VOTE, APPEND_ENTRY, RESP_VOTE, RESP_APPEND, CLIENT_APPLY, CLIENT_QUERY, RESP_CLIENT_APPLY, RESP_CLIENT_QUERY, ERROR
-};
+
+class RaftServer;
+
+typedef std::function<void(RPC_TYPE, string, std::shared_ptr<tcp::socket>)> incoming_rpc_callback;
 
 class RPC {
 public:
-    RPC(boost::asio::io_context &io, const tcp::endpoint &endpoint, std::function<void(RPC_TYPE, string)> cb);
+    RPC(boost::asio::io_context &io, const tcp::endpoint &endpoint, incoming_rpc_callback cb);
 
     void startAccept();
 
-    void make_rpc_call(RPC_TYPE rpc_type, const std::tuple<string, int> &server, const string &rpc_msg, std::function<void(boost::system::error_code &ec, std::size_t)> cb); //cb为callback，在RPC::writeTo中根据成功/失败执行下一步动作,
-
-    void make_rpc_call(RPC_TYPE rpc_type, std::shared_ptr<tcp::socket> socket, const string &rpc_msg, std::function<void(boost::system::error_code &ec, std::size_t)> cb); //重载，this is for responses to client (RESP_CLIENT_APPLY, RESP_CLIENT_QUERY)
-
-
-    string rpc_ae2str(const AppendEntryRpc &ae);
-
-    string rpc_rv2str(const RequestVoteRpc &rv);
-
-    string resp_ae2str(const Resp_AppendEntryRpc &resp);
-
-    string resp_rv2str(const Resp_RequestVoteRpc &resp);
-
-    string rpc_to_str(RPC_TYPE type, const string &rpc_str);
+    void make_rpc_call(RPC_TYPE rpc_type, const std::tuple<string, int> &server, const string &rpc_msg);
 
 private:
-
-    boost::asio::io_context &io_;
-
-    tcp::socket getConnection(std::string ip, int port, std::function<void(boost::system::error_code &ec, std::size_t)> cb); //异步的获取connection，需要传入回调
-
     void accept_callback(const boost::system::error_code &error, std::shared_ptr<tcp::socket> peer);
 
     void read_header(std::shared_ptr<tcp::socket> peer);
@@ -51,17 +36,15 @@ private:
 
     void add_header_then_write_and_hook(std::shared_ptr<tcp::socket> sp, const string &rpc_msg, const std::tuple<string, int> &server);
 
-public:
-
 private:
     enum {
         max_body_length = 1024 * 5
     };
-
-    std::map<std::tuple<string, int>, std::shared_ptr<tcp::socket>> client_sockets_;
-    std::function<void(RPC_TYPE, string msg, std::shared_ptr<tcp::socket>)> cb_;
+//    std::function<void(boost::system::error_code &ec, std::size_t)> write_cb_; //for now, we dont' need it
+    boost::asio::io_context &io_;
+    SocketMap sockets_map_;
+    incoming_rpc_callback cb_;
     char big_char[max_body_length];
     char meta_char[4];
-//    std::map<std::tuple<string, int>, std::shared_ptr<tcp::socket>> _connection_map;
     tcp::acceptor _acceptor; //acceptor和接收的逻辑其实可以分离，但是accept的connection可以存到连接池里
 };
