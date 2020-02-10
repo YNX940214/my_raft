@@ -392,7 +392,7 @@ void RaftServer::reactToIncomingMsg(RPC_TYPE _rpc_type, const string msg, std::s
     } else if (_rpc_type == CLIENT_QUERY) {
         get_from_state_machine(client_socket_sp, msg);
     } else {
-        Log_error << "unknown action";
+        Log_error << "unknown rpc_type";
     }
 }
 

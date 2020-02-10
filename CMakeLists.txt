@@ -31,7 +31,12 @@ add_executable(raft
         Timer.cpp
         state_machine/StateMachineControler.cpp
         state_machine/EasyStateMachine.cpp
-        RaftServer.cpp rpc/rpc_to_string.h rpc/rpc_to_string.cpp rpc/rpc_type.h rpc/SocketMap.cpp rpc/SocketMap.h)
+        RaftServer.cpp
+        rpc/rpc_to_string.h
+        rpc/rpc_to_string.cpp
+        rpc/rpc_type.h
+        rpc/SocketMap.cpp
+        rpc/SocketMap.h)
 if (protobuf_MODULE_COMPATIBLE) #Legacy mode
     target_include_directories(raft PUBLIC ${PROTOBUF_INCLUDE_DIRS})
     target_link_libraries(raft ${PROTOBUF_LIBRARIES})
@@ -49,6 +54,13 @@ else ()
 endif ()
 
 
+add_executable(client client/main.cpp
+        client.cpp
+        log/boost_lop.cpp
+        rpc/rpc.cpp
+        rpc.proto
+        util.cpp
+        state_machine/EasyStateMachine.cpp)
 #add_executable(test_thread_pool state_machine/test_thread_pool.cpp)
 #add_executable(state_machine_controler state_machine/StateMachineControler.cpp)
 

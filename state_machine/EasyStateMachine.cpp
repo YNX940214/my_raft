@@ -3,6 +3,8 @@
 //
 
 #include "EasyStateMachine.h"
+#include "../util.h"
+#include "../rpc/rpc_to_string.h"
 
 using namespace easy_state_machine;
 
@@ -58,4 +60,12 @@ string EasyStateMachine::build_query_str(const string &key) {
     string res;
     call.SerializeToString(&res);
     return res;
+}
+
+void EasyStateMachine::react_to_resp_query(const string &resp_query) {
+    Log_info << "client received resp_query: " << rpc_to_str(RESP_CLIENT_QUERY, resp_query);
+}
+
+void EasyStateMachine::react_to_resp_apply(const string &resp_apply) {
+    Log_info << "client received resp_apply: " << rpc_to_str(RESP_CLIENT_APPLY, resp_apply);
 }

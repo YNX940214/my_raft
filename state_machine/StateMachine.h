@@ -12,10 +12,17 @@ using std::string;
 class StateMachine {
 public:
 
-    virtual string apply(string encoded_apply_str) = 0;
+    virtual string apply(const string &encoded_apply_str) = 0;
 
-    virtual string get(string encoded_get_str) = 0;
+    virtual string get(const string &encoded_get_str) = 0;
 
+    virtual string build_apply_str(const string &key, int v) = 0;
+
+    virtual string build_query_str(const string &key) = 0;
+
+    virtual void react_to_resp_query(const string &resp_query) = 0;
+
+    virtual void react_to_resp_apply(const string &resp_apply) = 0;
 };
 
 

@@ -5,22 +5,34 @@
 #ifndef RAFT_CLIENT_H
 #define RAFT_CLIENT_H
 
-#include "../state_machine/EasyStateMachine.h"
+#include "../state_machine/StateMachine.h"
 #include "../rpc/rpc.h"
 
 class client {
 public:
-    bool apply_to_server();
+    client(io_service &ioContext, const std::tuple<string, int> &server, StateMachine *sm);
 
-    string query_from_server();
+    void run();
 
-    void react_to_resp_query(string resp_query_str);
+    void set_server(std::tuple<string, int> server);
 
-    void react_to_resp_apply(string resp_apply_str);
+    void apply_to_server();
+
+    void query_from_server();
+
+    void react_to_resp(RPC_TYPE rpc_type, const string &resp_str, std::shared_ptr<tcp::socket> socket);
+
+    void react_to_resp_query(const string &resp_query_str);
+
+    void react_to_resp_apply(const string &resp_apply_str);
+
+//    void prompt_for_apply();
 
 private:
     std::tuple<string, int> server_;
-
+    io_service &ioContext_;
+    StateMachine *sm_;
+    RPC network_;
 };
 
 
