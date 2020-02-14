@@ -8,9 +8,8 @@ int main(int argc, char **argv) {
         string config_path = string(argv[1]);
         init_logging(_port);
         boost::asio::io_service io;
-        tcp::endpoint _endpoint(tcp::v4(), _port);
         StateMachine *easy_state_machine = new EasyStateMachine();
-        RaftServer raft_RaftServer(io, "127.0.0.1", _port, _endpoint, config_path, easy_state_machine);
+        RaftServer raft_RaftServer(io, "127.0.0.1", _port, config_path, easy_state_machine);
         raft_RaftServer.run();
     } catch (std::exception &exception) {
         Log_fatal << "exception: " << exception.what();

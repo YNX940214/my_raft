@@ -32,7 +32,7 @@ enum State {
 class RaftServer {
 public:
 
-    RaftServer(io_service &loop, const string &_ip, int _port, const tcp::endpoint &_endpoint, string config_path, StateMachine *sm);
+    RaftServer(io_service &loop, const string &_ip, int _port, string config_path, StateMachine *sm);
 
     void run();
 
@@ -111,9 +111,9 @@ private:
     int majority_;
     int N_;
     //rpc
-    tcp::endpoint endpoint_;
     string ip_;
     int port_;
+    tcp::endpoint listen_point_;
     std::tuple<string, int> server_;
     map<std::tuple<string, int>, int> current_rpc_lsn_; //if resp_rpc's lsn != current[server]; then just ignore; (send back the index can't not ensuring idempotence; for example we received a resp which wandereding in the network for 100 years)
     RPC network_;

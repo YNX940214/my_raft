@@ -102,6 +102,16 @@ string resp_query2str(const resp_query &resp) {
     return s;
 }
 
+string entry2str(const rpc_Entry &entry) {
+    std::ostringstream oss;
+    oss << "entry:\n"
+           "term: " << entry.term()
+        << "\nindex: " << entry.index()
+        << "\nmsg: " << entry.msg();
+    string s = oss.str();
+    return s;
+}
+
 string rpc_to_str(RPC_TYPE type, const string &rpc_str) {
     switch (type) {
         case REQUEST_VOTE: {

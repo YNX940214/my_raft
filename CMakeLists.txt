@@ -30,6 +30,7 @@ add_executable(raft
         entry/data.cpp
         Timer.cpp
         state_machine/StateMachineControler.cpp
+        state_machine/easy_state_machine.pb.cc
         state_machine/EasyStateMachine.cpp
         RaftServer.cpp
         rpc/rpc_to_string.h
@@ -55,12 +56,26 @@ endif ()
 
 
 add_executable(client client/main.cpp
-        client.cpp
+        client/client.cpp
         log/boost_lop.cpp
+        util.cpp
+        state_machine/easy_state_machine.proto
+        state_machine/easy_state_machine.pb.cc
+        rpc.pb.cc
+        rpc/SocketMap.cpp
+        rpc/rpc_to_string.cpp
         rpc/rpc.cpp
         rpc.proto
-        util.cpp
         state_machine/EasyStateMachine.cpp)
+target_link_libraries(client protobuf::libprotobuf
+        ${Boost_LOG_LIBRARY}
+        ${Boost_LOG_SETUP_LIBRARY}
+        ${Boost_SERIALIZATION_LIBRARY}
+        ${Boost_WSERIALIZATION_LIBRARY}
+        ${Boost_FILE_SYSTEM_LIBRARY}
+        ${Boost_THREAD_LIBRARY}
+        ${Boost_SYSTEM_LIBRARY})
+
 #add_executable(test_thread_pool state_machine/test_thread_pool.cpp)
 #add_executable(state_machine_controler state_machine/StateMachineControler.cpp)
 

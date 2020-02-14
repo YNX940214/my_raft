@@ -31,7 +31,7 @@ public:
      */
     void insert(unsigned int index, const rpc_Entry &entry);
 
-    unsigned int size();
+    int size();
 
 private:
     void modify_offset_vector_after_insert(int index, const string &entry_str);

@@ -3,20 +3,21 @@
 //
 
 #include "RaftServer.h"
+#include "rpc/rpc_to_string.h"
 
-RaftServer::RaftServer(io_service &loop, const string &_ip, int _port, const tcp::endpoint &_endpoint, string config_path, StateMachine *sm) :
+RaftServer::RaftServer(io_service &loop, const string &_ip, int _port, string config_path, StateMachine *sm) :
         ip_(_ip),
         port_(_port),
         entries_(_port),
         server_(_ip, _port),
         ioContext(loop),
         term_(0),
+        listen_point_(tcp::v4(), port_),
         state_(follower),
         already_voted_(false),
         candidate_timer_(loop),
         commit_index_(-1),
-        network_(loop, _endpoint, std::bind(&RaftServer::reactToIncomingMsg, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3)),
-//            state_machine_(),
+        network_(loop, listen_point_, std::bind(&RaftServer::reactToIncomingMsg, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3)),
         winned_votes_(0),
         config_path_(config_path),
         smc_(sm, &entries_, ioContext, this) {
@@ -245,9 +246,14 @@ string RaftServer::build_rpc_ae_string(const tuple<string, int> &server) {
     rpc.set_port(port_);
 
     int index_to_send = nextIndex_[server];
-    if (index_to_send > 0) {
-        rpc_Entry prev_entry = entries_.get(index_to_send - 1);
-        rpc.set_prelog_term(prev_entry.term());
+    if (index_to_send >= 0) {
+        int prev_term = -1;
+        if (index_to_send > 0) {
+            rpc_Entry prev_entry = entries_.get(index_to_send - 1);
+            Log_debug << "the prev entry is:" << entry2str(prev_entry);
+            prev_term = prev_entry.term();
+        }
+        rpc.set_prelog_term(prev_term);
         if (index_to_send == entries_.size()) {
             //empty rpc as HB
         } else {
@@ -257,7 +263,7 @@ string RaftServer::build_rpc_ae_string(const tuple<string, int> &server) {
             entry_to_send->set_msg(entry.msg());
             entry_to_send->set_index(entry.index());
         }
-    } else if (index_to_send <= 0) {
+    } else { //(index_to_send < 0)
         rpc.set_prelog_term(-1);
     }
     string msg;
@@ -575,7 +581,7 @@ void RaftServer::make_resp_rv(bool vote, string context_log, tuple<string, int> 
     resp_vote.set_port(port_);
     string msg;
     resp_vote.SerializeToString(&msg);
-    writeTo(RESP_VOTE, server, to_string(RESP_VOTE) + msg);
+    writeTo(RESP_VOTE, server, msg);
 }
 
 void RaftServer::make_resp_ae(bool ok, string context_log, tuple<string, int> server, int lsn) {
@@ -608,7 +614,7 @@ inline void RaftServer::primary_deal_resp_ae_with_same_term(const tuple<string, 
             Log_debug << "last_send_index: " << last_send_index;
             Log_debug << "entries.size(): " << entries_.size();
             // whether send next entry immediately is determined by primary_deal_resp_ae, but whether to build an empty ae is determinde by AE()
-            if (last_send_index > entries_.size() || last_send_index < 0) {
+            if (last_send_index > entries_.size() || (last_send_index < 0 && entries_.size() == 0)) {
                 //don't nextIndex_[server] = last_send_index + 1;
                 Log_debug << "here1!";
                 // > or -1 , we don't send next index immediately, let the timers expires and send empty rps_ae as heartbeat, that situation 2 in AE()

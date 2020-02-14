@@ -48,7 +48,7 @@ Entries::Entries(int port) : data_(string(Consts::data_path) + string(".") + std
     }
 }
 
-unsigned Entries::size() {
+int Entries::size() {
     return size_;
 }
 

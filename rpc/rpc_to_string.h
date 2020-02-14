@@ -22,4 +22,6 @@ string resp_rv2str(const Resp_RequestVoteRpc &resp);
 
 string rpc_to_str(RPC_TYPE type, const string &rpc_str);
 
+string entry2str(const rpc_Entry &entry);
+
 #endif //RAFT_RPC_TO_STRING_H

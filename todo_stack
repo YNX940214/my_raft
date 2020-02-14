@@ -1,4 +1,5 @@
 debug
+next_index有bug导致 entry从0到1，也不能真确的发出AE
 
 
 # to review

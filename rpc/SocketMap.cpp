@@ -11,7 +11,7 @@ std::shared_ptr<tcp::socket> SocketMap::get(const std::tuple<string, int> &addr)
     if (!socket_sp) {
         Log_debug << "socket to " << server2str(addr) << " is null";
     } else {
-        Log_debug << "socket to " << server2str(addr) << " is not null, local endpoint" << get_socket_local_ip_port(socket_sp);
+        Log_debug << "socket to " << server2str(addr) << " is not null, local endpoint" << server2str(get_socket_local_ip_port(socket_sp));
     }
     return socket_sp;
 }
@@ -19,7 +19,7 @@ std::shared_ptr<tcp::socket> SocketMap::get(const std::tuple<string, int> &addr)
 void SocketMap::insert(std::shared_ptr<tcp::socket> sp) {
     const auto &remote = get_socket_remote_ip_port(sp);
     const auto &local = get_socket_local_ip_port(sp);
-    Log_trace << "inserting remote endpoint " << server2str(remote) << ", local endpoint " << local << " into socket map";
+    Log_trace << "inserting remote endpoint " << server2str(remote) << ", local endpoint " << server2str(local) << " into socket map";
     map_[remote] = sp;
 }
 

@@ -13,7 +13,7 @@ client::client(io_service &ioContext, const std::tuple<string, int> &server, Sta
         ioContext_(ioContext),
         server_(server),
         sm_(sm),
-        network_(ioContext, server_, std::bind(&client::react_to_resp, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3)) {
+        network_(ioContext, tcp::endpoint(tcp::v4(), 12345), std::bind(&client::react_to_resp, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3)) {
     Log_info << "client's primary is set to " << server2str(server);
 
 }
@@ -24,11 +24,17 @@ void client::set_server(std::tuple<string, int> server) {
 }
 
 void client::run() {
-    std::thread t([this]() { ioContext_.run(); });
+    std::thread t([this]() {
+        boost::asio::io_service::work work(ioContext_);
+
+        ioContext_.run();
+        assert(0);
+    });
     while (1) {
         cout << "input 'a' to apply or 'q' for query" << endl;
         char c;
         cin >> c;
+        cin.ignore();
         if (c == 'a') {
             apply_to_server();
         } else if (c == 'q') {
