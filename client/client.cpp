@@ -66,9 +66,9 @@ void client::query_from_server() {
 
 void client::react_to_resp(RPC_TYPE rpc_type, const string &resp_str, std::shared_ptr<tcp::socket> socket) {
     if (rpc_type == RESP_CLIENT_APPLY) {
-        react_to_resp_query(resp_str);
-    } else if (rpc_type == RESP_CLIENT_QUERY) {
         react_to_resp_apply(resp_str);
+    } else if (rpc_type == RESP_CLIENT_QUERY) {
+        react_to_resp_query(resp_str);
     } else {
         throw std::logic_error("unknown rpc_type");
     }

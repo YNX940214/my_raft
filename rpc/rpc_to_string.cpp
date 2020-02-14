@@ -95,7 +95,7 @@ string query_call2str(const query_call &rpc) {
 
 string resp_query2str(const resp_query &resp) {
     std::ostringstream oss;
-    oss << "resp_apply:\n"
+    oss << "resp_query:\n"
            "ok: " << resp.ok()
         << "\nv: " << resp.v();
     string s = oss.str();

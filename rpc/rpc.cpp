@@ -53,6 +53,7 @@ void RPC::make_rpc_call(RPC_TYPE rpc_type, const std::tuple<string, int> &server
                     Log_trace << "async_connect to: " << server2str(get_socket_remote_ip_port(sp));
                     sockets_map_.insert(sp);
                     add_header_then_write_and_hook(sp, rpc_msg, server);
+                    read_header(sp);
                 }
             });
         }

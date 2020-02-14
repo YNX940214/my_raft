@@ -21,7 +21,7 @@ StateMachineControler::StateMachineControler(StateMachine *_stateMachine, Entrie
 }
 
 //调用上级是 react2resp_ae，不能直接感知到client的socket
-void StateMachineControler::update_commit_index_and_apply(unsigned int new_index) { //这个对象是io线程调用的，所以在没有使用线程池的时候还是单线程的
+void StateMachineControler::update_commit_index_and_apply(int new_index) { //这个对象是io线程调用的，所以在没有使用线程池的时候还是单线程的
     Log_trace << "begin, new_index: " << new_index;
     Log_debug << "StateMachineControler updated commit_index from " << commit_index_ << " to " << new_index;
     commit_index_ = new_index;
@@ -30,7 +30,7 @@ void StateMachineControler::update_commit_index_and_apply(unsigned int new_index
     }
 }
 
-void StateMachineControler::apply_to_state_machine(unsigned int index_to_apply) {
+void StateMachineControler::apply_to_state_machine(int index_to_apply) {
     // remember that index_to_apply is 1 bigger than applied_index
     Log_trace << "pushing entry of index " << index_to_apply << "'s state machine msg to write_thread_pool";
     const rpc_Entry &entry = entries_->get(index_to_apply);
@@ -52,7 +52,7 @@ void StateMachineControler::get_from_state_machine(const string &encoded_query_s
     });
 }
 
-void StateMachineControler::post_resp_apply_call(unsigned int entry_index, const string &res_str) {
+void StateMachineControler::post_resp_apply_call(int entry_index, const string &res_str) {
     Log_trace << "post to ioContext of resp_apply_call of entry index " << entry_index;
     io_service_.post(std::bind(&RaftServer::write_resp_apply_call, raft_server_, entry_index, res_str));
 }
@@ -63,7 +63,7 @@ void StateMachineControler::post_resp_query_call(std::shared_ptr<tcp::socket> so
 }
 
 
-//void StateMachineControler::callback_write_back_to_client(const boost::system::error_code &error, std::size_t bytes_transferred, std::shared_ptr<tcp::socket> client_socket_sp, unsigned int client_map_key) {
+//void StateMachineControler::callback_write_back_to_client(const boost::system::error_code &error, std::size_t bytes_transferred, std::shared_ptr<tcp::socket> client_socket_sp, int client_map_key) {
 //    Log_trace << "called with error: " << error.message() << ", peer: " << server2str(get_socket_remote_ip_port(client_socket_sp));
 //    if (!error) {
 //        Log_trace << "succeeded";

@@ -5,7 +5,10 @@
 #include "EasyStateMachine.h"
 #include "../util.h"
 #include "../rpc/rpc_to_string.h"
+#include <iostream>
 
+using std::cout;
+using std::endl;
 using namespace easy_state_machine;
 
 string EasyStateMachine::get(const string &encoded_get_str) {
@@ -64,8 +67,10 @@ string EasyStateMachine::build_query_str(const string &key) {
 
 void EasyStateMachine::react_to_resp_query(const string &resp_query) {
     Log_info << "client received resp_query: " << rpc_to_str(RESP_CLIENT_QUERY, resp_query);
+    cout << "client received resp_query: " << rpc_to_str(RESP_CLIENT_QUERY, resp_query) << endl;
 }
 
 void EasyStateMachine::react_to_resp_apply(const string &resp_apply) {
     Log_info << "client received resp_apply: " << rpc_to_str(RESP_CLIENT_APPLY, resp_apply);
+    cout << "client received resp_apply: " << rpc_to_str(RESP_CLIENT_APPLY, resp_apply) << endl;
 }

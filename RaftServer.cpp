@@ -24,7 +24,7 @@ RaftServer::RaftServer(io_service &loop, const string &_ip, int _port, string co
     load_config_from_file();
     for (const auto &server_tuple: configuration_) {
         nextIndex_[server_tuple] = -1; // -1 not 0, because at the beginning, entries[0] raise Exception,
-        Follower_saved_index[server_tuple] = 0;
+        Follower_saved_index[server_tuple] = -1;
         current_rpc_lsn_[server_tuple] = 0;
         auto sp = make_shared<Timer>(loop);
         retry_timers_.insert({server_tuple, sp});
@@ -415,6 +415,7 @@ void RaftServer::append_client_apply_to_entries(std::shared_ptr<tcp::socket> cli
     entry.set_index(index);
     entry.set_msg(apply_str);
     entries_.insert(index, entry);
+    Follower_saved_index[server_] = index;
 }
 
 void RaftServer::react2ae(AppendEntryRpc rpc_ae) {
@@ -614,7 +615,7 @@ inline void RaftServer::primary_deal_resp_ae_with_same_term(const tuple<string, 
             Log_debug << "last_send_index: " << last_send_index;
             Log_debug << "entries.size(): " << entries_.size();
             // whether send next entry immediately is determined by primary_deal_resp_ae, but whether to build an empty ae is determinde by AE()
-            if (last_send_index > entries_.size() || (last_send_index < 0 && entries_.size() == 0)) {
+            if (last_send_index >= entries_.size() || (last_send_index < 0 && entries_.size() == 0)) {
                 //don't nextIndex_[server] = last_send_index + 1;
                 Log_debug << "here1!";
                 // > or -1 , we don't send next index immediately, let the timers expires and send empty rps_ae as heartbeat, that situation 2 in AE()
@@ -623,7 +624,7 @@ inline void RaftServer::primary_deal_resp_ae_with_same_term(const tuple<string, 
                 Log_debug << "primary's nextIndex of " << server2str(server) << " is set to " << nextIndex_[server];
                 primary_update_commit_index(server, last_send_index);
                 if (last_send_index == entries_.size()) {
-                    Log_debug << "here2!";
+                    Log_debug << "here2!"; //这里其实是不可能，可删除
                     // = , we don't send next index immediately, let the timers expires and send empty rps_ae as heartbeat, that situation 2 in AE()
                 } else {
                     Log_debug << "here3!";
@@ -692,9 +693,12 @@ inline void RaftServer::primary_update_commit_index(const tuple<string, int> &se
     vector<int> temp_sort(configuration_.size(), 0);
     int i = 0;
     for (const auto &ele:Follower_saved_index) {
+        Log_debug << server2str(ele.first) << "->" << ele.second;
         temp_sort[i] = ele.second;
+        i++;
     }
-    std::reverse(temp_sort.begin(), temp_sort.end());
+    std::sort(temp_sort.begin(), temp_sort.end(), greater<int>());
+    Log_debug << "sort: " << temp_sort[0] << ", " << temp_sort[1] << ", " << temp_sort[2] << "index : " << majority_ - 1;
     commit_index_ = temp_sort[majority_ - 1];
     Log_debug << "set committed index to " << commit_index_;
     apply_to_state_machine(commit_index_);
