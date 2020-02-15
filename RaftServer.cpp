@@ -172,9 +172,11 @@ void RaftServer::trans2P() {
     cancel_all_timers();
     state_ = primary;
 
-    int entry_size=entries_.size();
+    int entry_size = entries_.size();
     for (const auto &server: configuration_) {
-        nextIndex_[server]=entry_size;
+        Log_debug << "entry size: " << entry_size;
+        nextIndex_[server] = entry_size - 1;
+        Follower_saved_index[server] = -1;
     }
 
     for (const auto &server : configuration_) {
@@ -252,22 +254,49 @@ string RaftServer::build_rpc_ae_string(const tuple<string, int> &server) {
     rpc.set_port(port_);
 
     int index_to_send = nextIndex_[server];
+    Log_debug << "index to send is " << index_to_send << ", entry size is " << entries_.size() << "follower_saved_index is " << Follower_saved_index[server];
     if (index_to_send >= 0) {
-        int prev_term = -1;
-        if (index_to_send > 0) {
-            rpc_Entry prev_entry = entries_.get(index_to_send - 1);
-//            Log_debug << "the prev entry is:" << entry2str(prev_entry);
-            prev_term = prev_entry.term();
-        }
-        rpc.set_prelog_term(prev_term);
-        if (index_to_send == entries_.size()) {
-            //empty rpc as HB
+//        if (index_to_send == entries_.size() - 1 && Follower_saved_index[server] == entries_.size() - 1) { //注意这句话是错的，假设主和从稳定了[0]，这时client apply了[1]，这时AE的retry_timer到了进入这个函数，index_to_send:0, entry size:2, follower_saved_index:0,会进入else中，结果导致[0]再发送了一次，entry的index为0，pre_index则为-1，传给follower的commit_index为0，follower取-1，-1<0（0是Follower稳定的时候的commit index，变小了，抛出异常）
+        if (Follower_saved_index[server] == index_to_send) {
+            if (index_to_send < entries_.size() - 1) { //这里必须主动把nextIndex+1，否则考虑昨天记录在本子上的情景
+                index_to_send++;
+                nextIndex_[server] = index_to_send;
+                {
+                    //这里和block B中的内容相同，也要考虑此刻index_to_send==0的情况
+                    if (index_to_send > 0) {
+                        rpc_Entry prev_entry = entries_.get(index_to_send - 1);
+                        rpc.set_prelog_term(prev_entry.term());
+                    } else {
+                        rpc.set_prelog_term(-1);
+                    }
+                    const rpc_Entry &entry = entries_.get(index_to_send);
+                    Log_debug << "the entry to send is " << entry2str(entry);
+                    rpc_Entry *entry_to_send = rpc.add_entry();
+                    entry_to_send->set_term(entry.term());
+                    entry_to_send->set_msg(entry.msg());
+                    entry_to_send->set_index(entry.index());
+                }
+            }else{
+                //empty rpc as HB
+                rpc_Entry prev_entry = entries_.get(index_to_send);
+                rpc.set_prelog_term(prev_entry.term());
+            }
         } else {
-            const rpc_Entry &entry = entries_.get(index_to_send);
-            rpc_Entry *entry_to_send = rpc.add_entry();
-            entry_to_send->set_term(entry.term());
-            entry_to_send->set_msg(entry.msg());
-            entry_to_send->set_index(entry.index());
+            {
+                //block B
+                if (index_to_send > 0) {
+                    rpc_Entry prev_entry = entries_.get(index_to_send - 1);
+                    rpc.set_prelog_term(prev_entry.term());
+                } else {
+                    rpc.set_prelog_term(-1);
+                }
+                const rpc_Entry &entry = entries_.get(index_to_send);
+                Log_debug << "the entry to send is " << entry2str(entry);
+                rpc_Entry *entry_to_send = rpc.add_entry();
+                entry_to_send->set_term(entry.term());
+                entry_to_send->set_msg(entry.msg());
+                entry_to_send->set_index(entry.index());
+            }
         }
     } else { //(index_to_send < 0)
         rpc.set_prelog_term(-1);
@@ -450,7 +479,11 @@ void RaftServer::react2ae(AppendEntryRpc rpc_ae) {
         int rpc_ae_entry_size = rpc_ae.entry_size();
         if (rpc_ae_entry_size == 0) { // empty ae, means that this primary thinks this follower has already catch up with it
             if (pre_local_term == remote_term) {  //为了解决在从跟上主的log之后，主发来空的AE不能更新从commit index，但是又不能让（本应该被回滚的主）更新commit_index
-                follower_update_commit_index(commit_index, INT32_MAX);
+                if (prelog_term == -1) { //为什么要加这个判断条件？比如A是主，a和c同步了[0]，那么a的commit_index为0，但是a还没有传给b任何entry，所以rpc_ae的entry为空（同时prelog_term为-1），如果不加这个判断条件，那么follower_update_commit_index(commit_index, INT32_MAX);对b来说，其commit_index被设置为了0，但是它没有任何一条log，所以在更新commit_index的时候entries_抛出异常
+                    follower_update_commit_index(commit_index, -1);
+                } else {
+                    follower_update_commit_index(commit_index, INT32_MAX);
+                }
             }
             make_resp_ae(true, "成功insert", server, rpc_lsn);
             return;
@@ -571,10 +604,13 @@ void RaftServer::react2resp_rv(Resp_RequestVoteRpc &resp_rv) {
     std::tuple<string, int> server = std::make_tuple(resp_rv.ip(), resp_rv.port());
     int remote_term = resp_rv.term();
     if (term_ < remote_term) {
+        Log_debug << "term_ < remote term, trans2F";
         trans2F(remote_term);
     } else if (term_ > remote_term) {
+        Log_debug << "term > remote term, do nothing";
         //do nothing
     } else {
+        Log_debug << "term == remote term";
         if (state_ == candidate) {
             candidate_deal_resp_rv_with_same_term(server, resp_rv);
         }
@@ -609,7 +645,7 @@ void RaftServer::make_resp_ae(bool ok, string context_log, tuple<string, int> se
 }
 
 
-//helper functions, react2rv and react2ae is very simple in some situations (like term_ < remote), but some situations really wants deal(like for resp2rv a vote is granted), we deal them here
+//helper functions, react2rv and react2ae is very simple in some situations (like ,[ < remote), but some situations really wants deal(like for resp2rv a vote is granted), we deal them here
 // this is term_ == remote term, otherwise we deal somewhere else(actually just deny or trans2F)
 inline void RaftServer::primary_deal_resp_ae_with_same_term(const tuple<string, int> &server, Resp_AppendEntryRpc &resp_ae) {
     Log_trace << "begin";
@@ -621,41 +657,71 @@ inline void RaftServer::primary_deal_resp_ae_with_same_term(const tuple<string, 
     } else {
         bool ok = resp_ae.ok();
         int last_send_index = nextIndex_[server];
+        Log_debug << "ok: " << ok << ", last_send_index: " << last_send_index << ", entries.size(): " << entries_.size();
+        // whether send next entry immediately is determined by primary_deal_resp_ae, but whether to build an empty ae is determinde by AE()
+
         if (ok) {
-            Log_debug << "last_send_index: " << last_send_index;
-            Log_debug << "entries.size(): " << entries_.size();
-            // whether send next entry immediately is determined by primary_deal_resp_ae, but whether to build an empty ae is determinde by AE()
-            if (last_send_index >= entries_.size() || (last_send_index < 0 && entries_.size() == 0)) {
-                //don't nextIndex_[server] = last_send_index + 1;
-                Log_debug << "here1!";
-                // > or -1 , we don't send next index immediately, let the timers expires and send empty rps_ae as heartbeat, that situation 2 in AE()
-            } else {
+            Log_debug << "primary's Follower_saved_index of " << server2str(server) << " is set to " << nextIndex_[server];
+            primary_update_commit_index(server, last_send_index);
+
+            if (last_send_index == entries_.size() - 1) {
+                Log_debug << "primary has send all index that can be sent, just wait for retry time to expire to send an empty AE(remember check the follower_saved_index)";
+            } else if (last_send_index < entries_.size() - 1) {
+                Log_debug << "nextIndex to " << server2str(server) << ", is set from " << nextIndex_[server] << " to " << last_send_index + 1;
                 nextIndex_[server] = last_send_index + 1;
-                Log_debug << "primary's nextIndex of " << server2str(server) << " is set to " << nextIndex_[server];
-                primary_update_commit_index(server, last_send_index);
-                if (last_send_index == entries_.size()) {
-                    Log_debug << "here2!"; //这里其实是不可能，可删除
-                    // = , we don't send next index immediately, let the timers expires and send empty rps_ae as heartbeat, that situation 2 in AE()
-                } else {
-                    Log_debug << "here3!";
-                    retry_timers_[server]->get_core().expires_at(boost::posix_time::min_date_time);
-                    // immediately the next AE
-                    AE(server);
-                }
+                retry_timers_[server]->get_core().expires_at(boost::posix_time::min_date_time);
+                // immediately the next AE
+                AE(server);
+            } else {
+                throw_line("last send index is bigger than entries.size(), impossible");
             }
+
         } else {
-            /* ok == false, but there may be many possibilities, like remote server encouters disk error, what should it do(one way is just crash, no response, so primary will not push back the index to send)
-             * so we must ensure !!!!!!!!!!!!! the remote return resp_ae( ok =false ) only in one situation, that prev_index(stored remote) != rpc_index(in AE) -1, any other (disk failure, divide 0) will never return false! just crash it.
-             */
             if (last_send_index <= 0) {
-                // don't nextIndex_[server] = last_send_index - 1;
-                // do nothing, let the timers expires
+                ostringstream oss;
+                oss << "resp_ae's ok is false, but the last send index is " << last_send_index << ", which is impossible";
+                throw_line(oss.str());
             } else {
                 nextIndex_[server] = last_send_index - 1;
                 retry_timers_[server]->get_core().cancel();
                 AE(server);
             }
         }
+
+//        if (ok) {
+//            Log_debug << "last_send_index: " << last_send_index;
+//            Log_debug << "entries.size(): " << entries_.size();
+//            if (last_send_index >= entries_.size() || (last_send_index < 0 && entries_.size() == 0)) {
+//                //don't nextIndex_[server] = last_send_index + 1;
+//                Log_debug << "here1!";
+//                // > or -1 , we don't send next index immediately, let the timers expires and send empty rps_ae as heartbeat, that situation 2 in AE()
+//            } else {
+//                nextIndex_[server] = last_send_index + 1;
+//                Log_debug << "primary's nextIndex of " << server2str(server) << " is set to " << nextIndex_[server];
+//                primary_update_commit_index(server, last_send_index);
+//                if (last_send_index == entries_.size()) {
+//                    Log_debug << "here2!"; //这里其实是不可能，可删除
+//                    // = , we don't send next index immediately, let the timers expires and send empty rps_ae as heartbeat, that situation 2 in AE()
+//                } else {
+//                    Log_debug << "here3!";
+//                    retry_timers_[server]->get_core().expires_at(boost::posix_time::min_date_time);
+//                    // immediately the next AE
+//                    AE(server);
+//                }
+//            }
+//        } else {
+//            /* ok == false, but there may be many possibilities, like remote server encouters disk error, what should it do(one way is just crash, no response, so primary will not push back the index to send)
+//             * so we must ensure !!!!!!!!!!!!! the remote return resp_ae( ok =false ) only in one situation, that prev_index(stored remote) != rpc_index(in AE) -1, any other (disk failure, divide 0) will never return false! just crash it.
+//             */
+//            if (last_send_index <= 0) {
+//                // don't nextIndex_[server] = last_send_index - 1;
+//                // do nothing, let the timers expires
+//            } else {
+//                nextIndex_[server] = last_send_index - 1;
+//                retry_timers_[server]->get_core().cancel();
+//                AE(server);
+//            }
+//        }
     }
 }
 
