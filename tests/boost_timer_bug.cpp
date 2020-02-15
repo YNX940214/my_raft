@@ -44,7 +44,7 @@ private:
         int waiting_count = candidate_timer_.expires_from_now(boost::posix_time::milliseconds(300));
         if (waiting_count == 0) {
         } else {
-            throw std::logic_error("trans2C只能是timer_candidate_expire自然到期触发，所以不可能有waiting_count不为0的情况，否则就是未考虑的情况");
+            throw_line("trans2C只能是timer_candidate_expire自然到期触发，所以不可能有waiting_count不为0的情况，否则就是未考虑的情况");
         }
         candidate_timer_.async_wait(boost::asio::bind_executor(strand_, [this](const boost::system::error_code &error) {
             if (error == boost::asio::error::operation_aborted) {
@@ -72,7 +72,7 @@ private:
             std::ostringstream oss;
             oss << "if the cancel_all_timers has already canceled the RV retry, the exe stream will not come to here, as it comes here, there is something wrong" << endl;
             string s = oss.str();
-            throw logic_error(s);
+            throw_line(s);
         } else {
             retry_timer_.async_wait(boost::asio::bind_executor(strand_, [this, server](const boost::system::error_code &error) {
                 BOOST_LOG_TRIVIAL(trace) << "rv retry_timers expires";

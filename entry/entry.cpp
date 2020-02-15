@@ -22,6 +22,27 @@ using std::logic_error;
 using std::ifstream;
 using std::ofstream;
 
+
+//Entries::Entries(int port) : data_(string(Consts::data_path) + string(".") + std::to_string(port)) {
+//    path_offset_ = string(Consts::offset_path) + string(".") + std::to_string(port);
+//    Log_debug << "调试阶段，每次都从头开始";
+//    offset_.push_back(0);
+//
+//    size_ = offset_.size() - 1;
+//    entries_.reserve(size_);
+//    /*
+//     * if data_ file exists, we need to rebuild entries_ from it and offset_
+//     */
+//    for (int i = 0; i < size_; i++) {
+//        int entry_head = offset_[i];
+//        int entry_tail = offset_[i + 1];
+//        // read from file with [entry_head, entry_tail)
+//        string data = data_.read_from_offset(entry_head, entry_tail - entry_head);
+//        rpc_Entry entry;
+//        entry.ParseFromString(data);
+//        entries_.push_back(entry);
+//    }
+//}
 Entries::Entries(int port) : data_(string(Consts::data_path) + string(".") + std::to_string(port)) {
     path_offset_ = string(Consts::offset_path) + string(".") + std::to_string(port);
     if (!file_exists(path_offset_.c_str())) {
@@ -55,9 +76,9 @@ int Entries::size() {
 const rpc_Entry &Entries::get(int index) {
     if (index >= size_) {
         std::ostringstream oss;
-        oss << "the etries's size is " << size_ << ", the get index size is " << index << ", which is bigger";
+        oss << "the etries's size is " << size_ << ", the get index is " << index << ", which is bigger";
         string s = oss.str();
-        throw logic_error(s);
+        throw_line(s);
     }
     return entries_[index];
 }
@@ -69,9 +90,9 @@ void Entries::append(const rpc_Entry &entry) {
 void Entries::insert(unsigned int index, const rpc_Entry &entry) {
     if (index > size_) {
         std::ostringstream oss;
-        oss << "the etries's size is " << size_ << ", the get index size is " << index << ", which is bigger";
+        oss << "the etries's size is " << size_ << ", the insert index is " << index << ", which is bigger";
         string s = oss.str();
-        throw logic_error(s);
+        throw_line(s);
     }
 
     unsigned int offset_insert = get_offset(index);
@@ -97,7 +118,7 @@ void Entries::insert(unsigned int index, const rpc_Entry &entry) {
         std::ostringstream oss;
         oss << "insert error, size_ is " << size_ << ", index is " << index;
         string s = oss.str();
-        throw logic_error(s);
+        throw_line(s);
     }
     size_ = index + 1;
 }
@@ -112,7 +133,7 @@ void Entries::modify_offset_vector_after_insert(int index, const string &entry_s
         std::ostringstream oss;
         oss << "trying to modify offset with index " << index << " but there are only " << size_ << " offsets";
         string s = oss.str();
-        throw logic_error(s);
+        throw_line(s);
     }
 }
 
@@ -121,7 +142,7 @@ unsigned int Entries::get_offset(int index) {
         std::ostringstream oss;
         oss << "trying to get the " << index << "th offset, there are " << size_ << " entries in entries";
         string s = oss.str();
-        throw logic_error(s);
+        throw_line(s);
     } else {
         return offset_[index];
     }

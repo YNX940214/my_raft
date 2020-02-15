@@ -25,7 +25,7 @@ int random_rv_retry_expire();
 
 int random_ae_retry_expire();
 
-unsigned smaller(unsigned a, unsigned b);
+int smaller(int a, int b);
 
 bool file_exists(const string &path);
 
@@ -36,5 +36,21 @@ std::tuple<string, int> get_socket_remote_ip_port(std::shared_ptr<boost::asio::i
 std::tuple<string, int> get_socket_local_ip_port(std::shared_ptr<boost::asio::ip::tcp::socket> peer);
 
 std::vector<string> split_str_boost(const string &s, char delim);
+
+class my_exception : public std::runtime_error {  //https://stackoverflow.com/a/348862/9782619
+    std::string msg;
+public:
+    my_exception(const std::string &arg, const char *file, int line) :
+    std::runtime_error(arg) {
+        std::ostringstream o;
+        o << file << ":" << line << ": " << arg;
+        msg = o.str();
+    }
+    ~my_exception() throw() {}
+    const char *what() const throw() {
+        return msg.c_str();
+    }
+};
+#define throw_line(arg) throw my_exception(arg, __FILE__, __LINE__);
 
 #endif //RAFT_UTIL_H

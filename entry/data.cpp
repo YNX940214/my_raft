@@ -10,7 +10,18 @@
 
 #include <iostream>
 
-
+//data::data(const string &path) {
+//    const char *path_char = path.c_str();
+//    {
+//        Log_debug << "为了方便调试，每次都创建文件";
+//        if ((file_fd_ = open(path_char, O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1) {
+//            std::ostringstream oss;
+//            oss << "创建出错";
+//            string s = oss.str();
+//            throw_line(s);
+//        }
+//    }
+//}
 data::data(const string &path) {
     const char *path_char = path.c_str();
     if (!file_exists(path_char)) {
@@ -18,14 +29,14 @@ data::data(const string &path) {
             std::ostringstream oss;
             oss << "文件不存在，但是创建出错";
             string s = oss.str();
-            throw std::logic_error(s);
+            throw_line(s);
         }
     } else {
         if ((file_fd_ = open(path.c_str(), O_RDWR)) == -1) {
             std::ostringstream oss;
             oss << "文件存在，打开文件出错";
             string s = oss.str();
-            throw std::logic_error(s);
+            throw_line(s);
         }
     }
 }

@@ -70,7 +70,7 @@ void client::react_to_resp(RPC_TYPE rpc_type, const string &resp_str, std::share
     } else if (rpc_type == RESP_CLIENT_QUERY) {
         react_to_resp_query(resp_str);
     } else {
-        throw std::logic_error("unknown rpc_type");
+        throw_line("unknown rpc_type");
     }
 }
 

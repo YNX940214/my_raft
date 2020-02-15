@@ -16,7 +16,7 @@ StateMachineControler::StateMachineControler(StateMachine *_stateMachine, Entrie
         io_service_(_io_service),
         raft_server_(_raft_server) {
     if (_write_thread_num != 1) {
-        throw std::logic_error("for now, the state machine doesn't support multithread apply, so the write thread pool num can only be 1");
+        throw_line("for now, the state machine doesn't support multithread apply, so the write thread pool num can only be 1");
     }
 }
 

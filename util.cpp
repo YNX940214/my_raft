@@ -50,7 +50,7 @@ int random_ae_retry_expire() {
     return num;
 }
 
-unsigned smaller(unsigned a, unsigned b) {
+int smaller(int a, int b) {
     if (a < b) {
         return a;
     } else {

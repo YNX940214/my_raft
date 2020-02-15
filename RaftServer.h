@@ -36,7 +36,7 @@ public:
 
     void run();
 
-    void write_to_client(unsigned int entry_index, const string res_str);
+    void write_to_client(int entry_index, const string res_str);
 
     void write_to_client(std::shared_ptr<tcp::socket> socket, const string res_str);
 
@@ -81,17 +81,17 @@ private:
 
     void candidate_deal_resp_rv_with_same_term(const tuple<string, int> &server, Resp_RequestVoteRpc &resp_rv);
 
-    void apply_to_state_machine(unsigned int new_commit_index);
+    void apply_to_state_machine(int new_commit_index);
 
     inline void primary_update_commit_index(const tuple<string, int> &server, int index);
 
-    inline void follower_update_commit_index(unsigned remote_commit_index, unsigned remote_prelog_index);
+    inline void follower_update_commit_index(int remote_commit_index, int remote_prelog_index);
 
     void writeTo(RPC_TYPE rpc_type, const tuple<string, int> &server, const string &msg);
 
     void deal_with_write_error(boost::system::error_code &ec, std::size_t);
 
-    void write_resp_apply_call(unsigned int entry_index, const string res_str);
+    void write_resp_apply_call(int entry_index, const string res_str);
 
     void write_resp_query_call(std::shared_ptr<tcp::socket> socket, const string res_str);
 
@@ -135,7 +135,7 @@ private:
      * 让rpc层专心做 addr到socket的映射，
      * raft_server做entry index到 addr的映射
      */
-    map<unsigned int, std::tuple<string, int>> entryIndex_to_socketAddr_map_;
+    map<int, std::tuple<string, int>> entryIndex_to_socketAddr_map_;
 
     friend class StateMachineControler;
 };

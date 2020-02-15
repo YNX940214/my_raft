@@ -35,13 +35,13 @@ void RaftServer::run() {
     network_.startAccept();
     int waiting_counts = candidate_timer_.expires_from_now(boost::posix_time::milliseconds(random_candidate_expire()));
     if (waiting_counts != 0) {
-        throw std::logic_error("when server starts this can't be 0");
+        throw_line("when server starts this can't be 0");
     } else {
         //todo 这部分代码有很多地方冗余了，可以考虑用bind做抽象
         candidate_timer_.async_wait([this](const boost::system::error_code &error) {
             if (error) {
                 if (error == boost::asio::error::operation_aborted) {
-                    //throw std::logic_error("所有的handler通过set timer特殊值的方式取消，应该不可能出现operation_aborted");
+                    //throw_line("所有的handler通过set timer特殊值的方式取消，应该不可能出现operation_aborted");
                     /*
                      * 上面注释掉的代码抛出异常以检测，但是trans2C->cancel_all_timers—> expires 就会取消定时器（虽然它把expire time设置为min_date_time），所以上面总会抛异常，真确的做法是 return
                      */
@@ -50,7 +50,7 @@ void RaftServer::run() {
                     std::ostringstream oss;
                     oss << "handler in run's candidate_timer, error: " << error.message();
                     string str = oss.str();
-                    throw std::logic_error(str);
+                    throw_line(str);
                 }
             } else {
                 auto expire_time = candidate_timer_.expires_at();
@@ -72,7 +72,7 @@ void RaftServer::load_config_from_file() {
     std::ifstream in(config_path_);
     if (!in) {
         cout << "Cannot open config file: " << config_path_ << endl;
-        throw std::logic_error("read config file failed");
+        throw_line("read config file failed");
     }
 
     char str[255];
@@ -83,7 +83,7 @@ void RaftServer::load_config_from_file() {
         auto vec = split_str_boost(str, ':');
         cout << "the size is: " << vec.size() << endl;
         if (vec.size() != 2) {
-            throw std::logic_error(string("failed to read the config file line: ") + str);
+            throw_line(string("failed to read the config file line: ") + str);
         }
         int port = std::atoi(vec[1].c_str());
         cout << "read config line: " << vec[0] << ":" << vec[1] << endl;
@@ -136,13 +136,13 @@ void RaftServer::trans2F(int term) {
     state_ = follower;
     int waiting_count = candidate_timer_.expires_from_now(boost::posix_time::milliseconds(random_candidate_expire()));
     if (waiting_count != 0) {
-        throw std::logic_error("trans2F在一开始已经执行了cancel_all_timers函数，所以这里不应该有waiting_count=0");
+        throw_line("trans2F在一开始已经执行了cancel_all_timers函数，所以这里不应该有waiting_count=0");
     }
     candidate_timer_.async_wait([this](const boost::system::error_code &error) {
         Log_trace << "handler in trans2F's candidate_timers expired, error: " << error.message();
         if (error) {
             if (error == boost::asio::error::operation_aborted) {
-                //throw std::logic_error("所有的handler通过set timer特殊值的方式取消，应该不可能出现operation_aborted");
+                //throw_line("所有的handler通过set timer特殊值的方式取消，应该不可能出现operation_aborted");
                 /*
                  * 上面注释掉的代码抛出异常以检测，但是trans2C->cancel_all_timers—> expires 就会取消定时器（虽然它把expire time设置为min_date_time），所以上面总会抛异常，真确的做法是 return
                  */
@@ -151,12 +151,12 @@ void RaftServer::trans2F(int term) {
                 std::ostringstream oss;
                 oss << "handler in trans2F's candidate_timers, error: " << error.message();
                 string str = oss.str();
-                throw (str);
+                throw_line(str);
             }
         } else {
             auto expire_time = candidate_timer_.expires_at();
             if (expire_time == boost::posix_time::min_date_time) {
-                throw logic_error("逻辑错误，这里是不可能出现的，因为这个情景（trans2C未能即使取消h1，（然后RV->hook h2）h1运行)被waiting_counts != 0 完全覆盖了，如果抛出这个异常，说明出现了新的bug");
+                throw_line("逻辑错误，这里是不可能出现的，因为这个情景（trans2C未能即使取消h1，（然后RV->hook h2）h1运行)被waiting_counts != 0 完全覆盖了，如果抛出这个异常，说明出现了新的bug");
 //                    Log_trace << "handler in trans2F's candidate_timers is canceled by setting its timer's expiring time to min_date_time";
 //                    return;                         // canceled，we can't do anything
             } else {
@@ -171,6 +171,12 @@ void RaftServer::trans2P() {
     cout << __FUNCTION__ << endl;
     cancel_all_timers();
     state_ = primary;
+
+    int entry_size=entries_.size();
+    for (const auto &server: configuration_) {
+        nextIndex_[server]=entry_size;
+    }
+
     for (const auto &server : configuration_) {
         int port = std::get<1>(server);
         if (port != port_) {
@@ -197,13 +203,13 @@ void RaftServer::trans2C() {
         //完全可能出现这种情况，如果是cb_trans2_candidate的定时器自然到期，waiting_count就是0
         //leave behind
     } else {
-        throw std::logic_error("trans2C只能是timer_candidate_expire自然到期触发，所以不可能有waiting_count不为0的情况，否则就是未考虑的情况");
+        throw_line("trans2C只能是timer_candidate_expire自然到期触发，所以不可能有waiting_count不为0的情况，否则就是未考虑的情况");
     }
     candidate_timer_.async_wait([this](const boost::system::error_code &error) {
         Log_trace << "handler in trans2C's candidate_timers expired, error: " << error.message();
         if (error) {
             if (error == boost::asio::error::operation_aborted) {
-                //throw std::logic_error("所有的handler通过set timer特殊值的方式取消，应该不可能出现operation_aborted");
+                //throw_line("所有的handler通过set timer特殊值的方式取消，应该不可能出现operation_aborted");
                 /*
                  * 上面注释掉的代码抛出异常以检测，但是trans2C->cancel_all_timers—> expires 就会取消定时器（虽然它把expire time设置为min_date_time），所以上面总会抛异常，真确的做法是 return
                  */
@@ -212,12 +218,12 @@ void RaftServer::trans2C() {
                 std::ostringstream oss;
                 oss << "handler in trans2C's candidate_timers, error: " << error.message();
                 string str = oss.str();
-                throw (str);
+                throw_line(str);
             }
         } else {
             auto expire_time = candidate_timer_.expires_at();
             if (expire_time == boost::posix_time::min_date_time) {
-                throw logic_error("逻辑错误，这里是不可能出现的，因为这个情景（trans2C未能即使取消h1，（然后RV->hook h2）h1运行)被waiting_counts != 0 完全覆盖了，如果抛出这个异常，说明出现了新的bug");
+                throw_line("逻辑错误，这里是不可能出现的，因为这个情景（trans2C未能即使取消h1，（然后RV->hook h2）h1运行)被waiting_counts != 0 完全覆盖了，如果抛出这个异常，说明出现了新的bug");
 //                    Log_trace << "handler in trans2C's candidate_timers is canceled by setting its timer's expiring time to min_date_time";
 //                    return;                         // canceled，we can't do anything
             } else {
@@ -237,7 +243,7 @@ void RaftServer::trans2C() {
 string RaftServer::build_rpc_ae_string(const tuple<string, int> &server) {
     Log_trace << "begin: server: " << server2str(server);
     AppendEntryRpc rpc;
-    unsigned int server_current_rpc_lsn = current_rpc_lsn_[server];
+    int server_current_rpc_lsn = current_rpc_lsn_[server];
     current_rpc_lsn_[server] = server_current_rpc_lsn + 1;
     rpc.set_lsn(server_current_rpc_lsn);
     rpc.set_term(term_);
@@ -250,7 +256,7 @@ string RaftServer::build_rpc_ae_string(const tuple<string, int> &server) {
         int prev_term = -1;
         if (index_to_send > 0) {
             rpc_Entry prev_entry = entries_.get(index_to_send - 1);
-            Log_debug << "the prev entry is:" << entry2str(prev_entry);
+//            Log_debug << "the prev entry is:" << entry2str(prev_entry);
             prev_term = prev_entry.term();
         }
         rpc.set_prelog_term(prev_term);
@@ -280,13 +286,13 @@ void RaftServer::AE(const tuple<string, int> &server) {
 
     int waiting_counts = t1->get_core().expires_from_now(boost::posix_time::milliseconds(random_ae_retry_expire()));
     if (waiting_counts != 0) {
-        throw std::logic_error("should be zero, a timer can't be interrupt by network, but when AE is called, there should be no hooks on the timer");
+        throw_line("should be zero, a timer can't be interrupt by network, but when AE is called, there should be no hooks on the timer");
     } else {
         t1->get_core().async_wait([this, t1, server](const boost::system::error_code &error) {
             Log_trace << "handler in AE's retry timer to " << server2str(server) << " expired, error: " << error.message();
             if (error) {
                 if (error == boost::asio::error::operation_aborted) {
-                    //throw std::logic_error("所有的handler通过set timer特殊值的方式取消，应该不可能出现operation_aborted");
+                    //throw_line("所有的handler通过set timer特殊值的方式取消，应该不可能出现operation_aborted");
                     /*
                      * 上面注释掉的代码抛出异常以检测，但是trans2C->cancel_all_timers—> expires 就会取消定时器（虽然它把expire time设置为min_date_time），所以上面总会抛异常，真确的做法是 return
                      */
@@ -295,7 +301,7 @@ void RaftServer::AE(const tuple<string, int> &server) {
                     std::ostringstream oss;
                     oss << "handler in AE's retry timer to " << server2str(server) << ", error: " << error.message();
                     string str = oss.str();
-                    throw (str);
+                    throw_line(str);
                 }
             } else {
                 auto expire_time = t1->get_core().expires_at();
@@ -317,7 +323,7 @@ void RaftServer::AE(const tuple<string, int> &server) {
 
 string RaftServer::build_rpc_rv_string(const tuple<string, int> &server) {
     Log_trace << "begin: server: " << server2str(server);
-    unsigned int server_current_rpc_lsn = current_rpc_lsn_[server];
+    int server_current_rpc_lsn = current_rpc_lsn_[server];
     current_rpc_lsn_[server] = server_current_rpc_lsn + 1;
     RequestVoteRpc rpc;
     rpc.set_lsn(server_current_rpc_lsn);
@@ -339,7 +345,7 @@ void RaftServer::RV(const tuple<string, int> &server) {
     int waiting_counts = timer->get_core().expires_from_now(boost::posix_time::milliseconds(random_rv_retry_expire()));
     if (waiting_counts != 0) {
         /*
-         * throw logic_error("if the cancel_all_timers has already canceled the RV retry, the exe stream will not come to here, as it comes here, there is something wrong");
+         * throw_line("if the cancel_all_timers has already canceled the RV retry, the exe stream will not come to here, as it comes here, there is something wrong");
          * 上述代码抛异常以便检查，实际为asset，因为我认为不会出现那种情况，但是回出现，情景如下：
          * handler1（RV）expire 了但是为执行，此时trans2C执行，没有成功取消handler1（虽然handler1的expire时间已超过），但是hook了handler2，现在handler1执行，检查到timer上有1个handler，就是handler2，抛异常
          */
@@ -349,7 +355,7 @@ void RaftServer::RV(const tuple<string, int> &server) {
             Log_trace << "handler in RV's retry timer to " << server2str(server) << " expired, error: " << error.message();
             if (error) {
                 if (error == boost::asio::error::operation_aborted) {
-                    //throw std::logic_error("所有的handler通过set timer特殊值的方式取消，应该不可能出现operation_aborted");
+                    //throw_line("所有的handler通过set timer特殊值的方式取消，应该不可能出现operation_aborted");
                     /*
                      * 上面注释掉的代码抛出异常以检测，但是trans2C->cancel_all_timers—> expires 就会取消定时器（虽然它把expire time设置为min_date_time），所以上面总会抛异常，真确的做法是 return
                      */
@@ -358,12 +364,12 @@ void RaftServer::RV(const tuple<string, int> &server) {
                     std::ostringstream oss;
                     oss << "handler in RV's retry timer to " << server2str(server) << ", error: " << error.message();
                     string str = oss.str();
-                    throw (str);
+                    throw_line(str);
                 }
             } else {
                 auto expire_time = timer->get_core().expires_at();
                 if (expire_time == boost::posix_time::min_date_time) {
-                    throw logic_error("逻辑错误，这里是不可能出现的，因为这个情景（trans2C未能即使取消h1，（然后RV->hook h2）h1运行)被waiting_counts != 0 完全覆盖了，如果抛出这个异常，说明出现了新的bug");
+                    throw_line("逻辑错误，这里是不可能出现的，因为这个情景（trans2C未能即使取消h1，（然后RV->hook h2）h1运行)被waiting_counts != 0 完全覆盖了，如果抛出这个异常，说明出现了新的bug");
 //                        Log_trace << "handler in RV's retry_timer_ to " << server2str(server) << " is canceled by setting its timer's expiring time to min_date_time";
 //                        return;                         // canceled，we can't do anything
                 } else {
@@ -432,8 +438,9 @@ void RaftServer::react2ae(AppendEntryRpc rpc_ae) {
         return;
     } else { //term_ <= remote_term
         if (state_ == primary && term_ == remote_term) {
-            throw std::logic_error("error, one term has two primaries");
+            throw_line("error, one term has two primaries");
         }
+        int pre_local_term = term_;
         trans2F(remote_term);//会设置定时器，所以此函数不需要设置定时器了
         /*
          一开始想法是commitIndex直接赋值给本地commitIndex，然后本地有一个线程直接根据本第commitIndex闷头apply to stateMachine就行了（因为两者完全正交），
@@ -442,6 +449,9 @@ void RaftServer::react2ae(AppendEntryRpc rpc_ae) {
          */
         int rpc_ae_entry_size = rpc_ae.entry_size();
         if (rpc_ae_entry_size == 0) { // empty ae, means that this primary thinks this follower has already catch up with it
+            if (pre_local_term == remote_term) {  //为了解决在从跟上主的log之后，主发来空的AE不能更新从commit index，但是又不能让（本应该被回滚的主）更新commit_index
+                follower_update_commit_index(commit_index, INT32_MAX);
+            }
             make_resp_ae(true, "成功insert", server, rpc_lsn);
             return;
         } else if (rpc_ae_entry_size == 1) {
@@ -454,7 +464,7 @@ void RaftServer::react2ae(AppendEntryRpc rpc_ae) {
                 make_resp_ae(true, "成功insert", server, rpc_lsn);
                 return;
             } else {
-                unsigned last_index = entries_.size() - 1;
+                int last_index = entries_.size() - 1;
                 if (last_index < prelog_index) {
                     make_resp_ae(false, "react2ae, term is ok, but follower's last entry index is " + to_string(last_index) + ", but prelog_index is " + to_string(prelog_index), server, rpc_lsn);
                     return;
@@ -484,7 +494,7 @@ void RaftServer::react2ae(AppendEntryRpc rpc_ae) {
                 }
             }
         } else {
-            throw logic_error("rpc_ae's entry size is bigger 1");
+            throw_line("rpc_ae's entry size is bigger 1");
         }
     }
 }
@@ -551,7 +561,7 @@ void RaftServer::react2resp_ae(Resp_AppendEntryRpc &resp_ae) {
         if (state_ == primary) {
             primary_deal_resp_ae_with_same_term(server, resp_ae);
         } else {
-            throw std::logic_error("不可能的情况，主ae，收到resp_ae的remote_term与term_相等，但是state不为主，说明一个term出现了两个主，错误");
+            throw_line("不可能的情况，主ae，收到resp_ae的remote_term与term_相等，但是state不为主，说明一个term出现了两个主，错误");
         }
     }
 }
@@ -678,7 +688,7 @@ inline void RaftServer::candidate_deal_resp_rv_with_same_term(const tuple<string
 
 //todo follower modify commit_index and trigger apply_to_state_machine
 
-void RaftServer::apply_to_state_machine(unsigned int new_commit_index) {
+void RaftServer::apply_to_state_machine(int new_commit_index) {
     /*
      * 希望有另一个线程（或者线程池）来进行state machine 的操作，返回string，再把string回传给io线程，然后io 线程通过shared_ptr写回 resp
      * 需要注意shared_ptr的生命周期， client_modify_str对raft server是不感知的
@@ -704,16 +714,18 @@ inline void RaftServer::primary_update_commit_index(const tuple<string, int> &se
     apply_to_state_machine(commit_index_);
 }
 
-inline void RaftServer::follower_update_commit_index(unsigned remote_commit_index, unsigned remote_prelog_index) {
+inline void RaftServer::follower_update_commit_index(int remote_commit_index, int remote_prelog_index) {
     Log_trace << "begin: remote_commit_index: " << remote_commit_index << ", remote_prelog_index: " << remote_prelog_index;
     int smaller_index = smaller(remote_commit_index, remote_prelog_index);
     if (smaller_index > commit_index_) {
         commit_index_ = smaller_index;
+        Log_debug << "set commit_index to " << smaller_index;
+        apply_to_state_machine(commit_index_);
     } else if (smaller_index == commit_index_) {
 
     } else {
         string err = "remote_commit_index " + std::to_string(smaller_index) + " is smaller than local commit_index " + std::to_string(commit_index_) + ", this is impossible";
-        throw std::logic_error(err);
+        throw_line(err);
     }
 }
 
@@ -726,7 +738,7 @@ void RaftServer::deal_with_write_error(boost::system::error_code &ec, std::size_
 }
 
 
-void RaftServer::write_resp_apply_call(unsigned int entry_index, const string res_str) {
+void RaftServer::write_resp_apply_call(int entry_index, const string res_str) {
     const auto &remote_addr = entryIndex_to_socketAddr_map_[entry_index];
     network_.make_rpc_call(RESP_CLIENT_APPLY, remote_addr, res_str);
 }

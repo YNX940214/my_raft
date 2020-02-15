@@ -16,7 +16,7 @@ int main() {
         if (in) cout << str << endl;
         auto vec = split_str(str, ':');
         if (vec.size() != 2) {
-            throw std::logic_error(string("failed to read the config file line: ") + str);
+            throw_line(string("failed to read the config file line: ") + str);
         }
     }
     in.close();

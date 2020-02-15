@@ -4,14 +4,19 @@
 #include "rpc_to_string.h"
 #include "../state_machine/easy_state_machine.pb.h"
 #include <sstream>
+#include "../util.h"
 
 
 using namespace easy_state_machine;
 
 string rpc_ae2str(const AppendEntryRpc &ae) {
     std::ostringstream oss;
-    oss << "RPC_AE:\n"
-           "term: " << ae.term()
+    oss << "RPC_AE:";
+    if (ae.entry_size() != 0) {
+        oss << "(with msg)";
+    }
+
+    oss << "\nterm: " << ae.term()
         << "\nprelog_term: " << ae.prelog_term()
         << "\ncommit_index: " << ae.commit_index()
         << "\nlsn: " << ae.lsn()
@@ -163,6 +168,6 @@ string rpc_to_str(RPC_TYPE type, const string &rpc_str) {
         }
             break;
         default:
-            throw std::runtime_error("unknown rpc type");
+            throw_line("unknown rpc type");
     }
 }

@@ -99,7 +99,7 @@ void RPC::read_body(std::shared_ptr<tcp::socket> peer, const boost::system::erro
             Log_info << "connection from " << peer->remote_endpoint().address() << ":" << peer->remote_endpoint().port() << " is closed that side";
             sockets_map_.remove(peer);
         } else {
-            throw std::logic_error(error.message());  //这是完全有可能的，比如对面关闭了进程，需要处理
+            throw_line(error.message()); //这是完全有可能的，比如对面关闭了进程，需要处理
         }
     } else {
         char char_msg_len[5] = "";
@@ -118,7 +118,7 @@ void RPC::body_callback(std::shared_ptr<tcp::socket> peer, const boost::system::
     if (error) {
         Log_error << "error: " << error.message();
         sockets_map_.remove(peer);
-        throw std::logic_error(error.message());
+        throw_line(error.message());
     } else {
         unsigned int len_type = 1;
         char char_rpc_type[1] = "";
