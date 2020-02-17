@@ -75,8 +75,13 @@ string server2str(const std::tuple<string, int> &server) {
 
 std::tuple<string, int> get_socket_remote_ip_port(std::shared_ptr<boost::asio::ip::tcp::socket> peer) {
     //todo maybe more robust
-    const auto &remote_ep = peer->remote_endpoint();
-    return std::make_tuple(remote_ep.address().to_string(), remote_ep.port());
+    try {
+        const auto &remote_ep = peer->remote_endpoint();
+        return std::make_tuple(remote_ep.address().to_string(), remote_ep.port());
+    } catch (std::exception &exception) {
+        throw std::logic_error("是这里么？");
+    }
+
 }
 
 std::tuple<string, int> get_socket_local_ip_port(std::shared_ptr<boost::asio::ip::tcp::socket> peer) {

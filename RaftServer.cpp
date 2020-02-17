@@ -256,13 +256,48 @@ string RaftServer::build_rpc_ae_string(const tuple<string, int> &server) {
     int index_to_send = nextIndex_[server];
     Log_debug << "index to send is " << index_to_send << ", entry size is " << entries_.size() << "follower_saved_index is " << Follower_saved_index[server];
     if (index_to_send >= 0) {
-//        if (index_to_send == entries_.size() - 1 && Follower_saved_index[server] == entries_.size() - 1) { //注意这句话是错的，假设主和从稳定了[0]，这时client apply了[1]，这时AE的retry_timer到了进入这个函数，index_to_send:0, entry size:2, follower_saved_index:0,会进入else中，结果导致[0]再发送了一次，entry的index为0，pre_index则为-1，传给follower的commit_index为0，follower取-1，-1<0（0是Follower稳定的时候的commit index，变小了，抛出异常）
-        if (Follower_saved_index[server] == index_to_send) {
-            if (index_to_send < entries_.size() - 1) { //这里必须主动把nextIndex+1，否则考虑昨天记录在本子上的情景
-                index_to_send++;
-                nextIndex_[server] = index_to_send;
+        if (Follower_saved_index[server] == -1) {
+            //todo !!! 这里并不能区分切主和 正常apply一个log的情况（见log），我怀疑当nextIndex在从追上了主之后还是要==entries_.size()，但是build_rpc_ae_string在发现这种情况的时候可以判断出这是一次HB
+            //follower_saved_index 为-1，说明这是一个刚刚切过主的primary （错！并不能区分）
+            //index_to_send == -1的情况已经被排除
+            {
+                //block A
+                //empty rpc as HB
+                rpc_Entry prev_entry = entries_.get(index_to_send);
+                rpc.set_prelog_term(prev_entry.term());
+            }
+        }else{
+            //        if (index_to_send == entries_.size() - 1 && Follower_saved_index[server] == entries_.size() - 1) { //注意这句话是错的，假设主和从稳定了[0]，这时client apply了[1]，这时AE的retry_timer到了进入这个函数，index_to_send:0, entry size:2, follower_saved_index:0,会进入else中，结果导致[0]再发送了一次，entry的index为0，pre_index则为-1，传给follower的commit_index为0，follower取-1，-1<0（0是Follower稳定的时候的commit index，变小了，抛出异常）
+            if (Follower_saved_index[server] == index_to_send) {
+                if (index_to_send < entries_.size() - 1) { //这里必须主动把nextIndex+1，否则考虑昨天记录在本子上的情景
+                    index_to_send++;
+                    nextIndex_[server] = index_to_send;
+                    {
+                        //这里和block B中的内容相同，也要考虑此刻index_to_send==0的情况
+                        if (index_to_send > 0) {
+                            rpc_Entry prev_entry = entries_.get(index_to_send - 1);
+                            rpc.set_prelog_term(prev_entry.term());
+                        } else {
+                            rpc.set_prelog_term(-1);
+                        }
+                        const rpc_Entry &entry = entries_.get(index_to_send);
+                        Log_debug << "the entry to send is " << entry2str(entry);
+                        rpc_Entry *entry_to_send = rpc.add_entry();
+                        entry_to_send->set_term(entry.term());
+                        entry_to_send->set_msg(entry.msg());
+                        entry_to_send->set_index(entry.index());
+                    }
+                } else {
+                    {
+                        //block A
+                        //empty rpc as HB
+                        rpc_Entry prev_entry = entries_.get(index_to_send);
+                        rpc.set_prelog_term(prev_entry.term());
+                    }
+                }
+            } else {
                 {
-                    //这里和block B中的内容相同，也要考虑此刻index_to_send==0的情况
+                    //block B
                     if (index_to_send > 0) {
                         rpc_Entry prev_entry = entries_.get(index_to_send - 1);
                         rpc.set_prelog_term(prev_entry.term());
@@ -276,26 +311,6 @@ string RaftServer::build_rpc_ae_string(const tuple<string, int> &server) {
                     entry_to_send->set_msg(entry.msg());
                     entry_to_send->set_index(entry.index());
                 }
-            }else{
-                //empty rpc as HB
-                rpc_Entry prev_entry = entries_.get(index_to_send);
-                rpc.set_prelog_term(prev_entry.term());
-            }
-        } else {
-            {
-                //block B
-                if (index_to_send > 0) {
-                    rpc_Entry prev_entry = entries_.get(index_to_send - 1);
-                    rpc.set_prelog_term(prev_entry.term());
-                } else {
-                    rpc.set_prelog_term(-1);
-                }
-                const rpc_Entry &entry = entries_.get(index_to_send);
-                Log_debug << "the entry to send is " << entry2str(entry);
-                rpc_Entry *entry_to_send = rpc.add_entry();
-                entry_to_send->set_term(entry.term());
-                entry_to_send->set_msg(entry.msg());
-                entry_to_send->set_index(entry.index());
             }
         }
     } else { //(index_to_send < 0)
@@ -452,6 +467,16 @@ void RaftServer::append_client_apply_to_entries(std::shared_ptr<tcp::socket> cli
     entries_.insert(index, entry);
     Follower_saved_index[server_] = index;
 }
+/*
+ * 回顾一下关于AE和primary_deal_resp_ae_with_same_term,和build_rpc_ae_str一路过程中遇到的几个bug
+ * bug1：
+ *  - code with the bug exists：46d835a44161bde2b19fd616653de985c6a424e1 the left side code, the feature is, after nextIndex[server] steadies,
+ *  nextIndex[server] == entries_.size()
+ *  - bug scene:(with example), P and F with [0], P make an empty AE to F(HB), before the resp_ae back, client apply [1], then P received
+ *  resp_ae, P will add its nextIndex to 2,  *  (but P has never sent [1] to F!), the build_rpc_ae_str will make an empty AE(entry size:2
+ *  , nextIndex: 2, follower save index: 0)
+ *
+ */
 
 void RaftServer::react2ae(AppendEntryRpc rpc_ae) {
     Log_debug << "begin";
