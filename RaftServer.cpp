@@ -23,7 +23,7 @@ RaftServer::RaftServer(io_service &loop, const string &_ip, int _port, string co
         smc_(sm, &entries_, ioContext, this) {
     load_config_from_file();
     for (const auto &server_tuple: configuration_) {
-        nextIndex_[server_tuple] = -1; // -1 not 0, because at the beginning, entries[0] raise Exception,
+        nextIndex_[server_tuple] = 0; // -1 not 0, because at the beginning, entries[0] raise Exception,
         Follower_saved_index[server_tuple] = -1;
         current_rpc_lsn_[server_tuple] = 0;
         auto sp = make_shared<Timer>(loop);
@@ -127,7 +127,7 @@ void RaftServer::cancel_all_timers() {
 
 
 void RaftServer::trans2F(int term) {
-    Log_info << "begin";
+    Log_info << "begin, term: " << term;
     cout << __FUNCTION__ << endl;
     cancel_all_timers();
     winned_votes_ = 0;
@@ -172,9 +172,11 @@ void RaftServer::trans2P() {
     cancel_all_timers();
     state_ = primary;
 
-    int entry_size=entries_.size();
+    int entry_size = entries_.size();
+    Log_debug << "entry size: " << entry_size;
     for (const auto &server: configuration_) {
-        nextIndex_[server]=entry_size;
+        nextIndex_[server] = entry_size;
+        Follower_saved_index[server] = -1;
     }
 
     for (const auto &server : configuration_) {
@@ -247,18 +249,24 @@ string RaftServer::build_rpc_ae_string(const tuple<string, int> &server) {
     current_rpc_lsn_[server] = server_current_rpc_lsn + 1;
     rpc.set_lsn(server_current_rpc_lsn);
     rpc.set_term(term_);
-    rpc.set_commit_index(commit_index_);
+    //这里我们在主比较follower_saved_index和commit_index，发送其中更小的那个，从在收到的时候不判断commit_index与entry size的大小
+    //做一个鱼雷
+    int commit_index_to_send = commit_index_;
+    {
+        int F_saved = Follower_saved_index[server];
+        if (commit_index_ > F_saved) {
+            commit_index_to_send = F_saved;
+        }
+    }
+    rpc.set_commit_index(commit_index_to_send);
     rpc.set_ip(ip_);
     rpc.set_port(port_);
 
     int index_to_send = nextIndex_[server];
-    if (index_to_send >= 0) {
-        int prev_term = -1;
-        if (index_to_send > 0) {
-            rpc_Entry prev_entry = entries_.get(index_to_send - 1);
+    if (index_to_send > 0) {
+        rpc_Entry prev_entry = entries_.get(index_to_send - 1);
 //            Log_debug << "the prev entry is:" << entry2str(prev_entry);
-            prev_term = prev_entry.term();
-        }
+        int prev_term = prev_entry.term();
         rpc.set_prelog_term(prev_term);
         if (index_to_send == entries_.size()) {
             //empty rpc as HB
@@ -430,11 +438,12 @@ void RaftServer::react2ae(AppendEntryRpc rpc_ae) {
     int prelog_term = rpc_ae.prelog_term();
     int commit_index = rpc_ae.commit_index();
     int rpc_lsn = rpc_ae.lsn();
+    bool is_empty_ae = rpc_ae.entry_size() == 0;
     std::tuple<string, int> server = std::make_tuple(rpc_ae.ip(), rpc_ae.port());
 
     // 这行错了!       assert(commitIndex <= prelog_index); 完全有可能出现commitIndex比prelog_index大的情况
     if (term_ > remote_term) {
-        make_resp_ae(false, "react2ae, term_ > term", server, rpc_lsn);
+        make_resp_ae(false, "react2ae, term_ > term", server, rpc_lsn, is_empty_ae);
         return;
     } else { //term_ <= remote_term
         if (state_ == primary && term_ == remote_term) {
@@ -448,11 +457,12 @@ void RaftServer::react2ae(AppendEntryRpc rpc_ae) {
          难道那个线程就无脑把到80的entry给apply了？所以本地的commitIndex只能是
          */
         int rpc_ae_entry_size = rpc_ae.entry_size();
+        Log_debug << "rpc_ae_entry_size " << rpc_ae_entry_size;
         if (rpc_ae_entry_size == 0) { // empty ae, means that this primary thinks this follower has already catch up with it
             if (pre_local_term == remote_term) {  //为了解决在从跟上主的log之后，主发来空的AE不能更新从commit index，但是又不能让（本应该被回滚的主）更新commit_index
-                follower_update_commit_index(commit_index, INT32_MAX);
+                follower_update_commit_index(commit_index, INT32_MAX); //无脑接受commit_index
             }
-            make_resp_ae(true, "成功insert", server, rpc_lsn);
+            make_resp_ae(true, "成功insert", server, rpc_lsn, is_empty_ae);
             return;
         } else if (rpc_ae_entry_size == 1) {
             const raft_rpc::rpc_Entry &entry = rpc_ae.entry(0);
@@ -461,12 +471,12 @@ void RaftServer::react2ae(AppendEntryRpc rpc_ae) {
                 entries_.insert(0, entry);
                 // we choose the smaller one to be the commit index, the logic is in entries_.update_commit_index function
                 follower_update_commit_index(commit_index, prelog_index);
-                make_resp_ae(true, "成功insert", server, rpc_lsn);
+                make_resp_ae(true, "成功insert", server, rpc_lsn, is_empty_ae);
                 return;
             } else {
                 int last_index = entries_.size() - 1;
                 if (last_index < prelog_index) {
-                    make_resp_ae(false, "react2ae, term is ok, but follower's last entry index is " + to_string(last_index) + ", but prelog_index is " + to_string(prelog_index), server, rpc_lsn);
+                    make_resp_ae(false, "react2ae, term is ok, but follower's last entry index is " + to_string(last_index) + ", but prelog_index is " + to_string(prelog_index), server, rpc_lsn, is_empty_ae);
                     return;
                 } else { // if (last_index >= prelog_index)  注意> 和 = 的情况是一样的，（至少目前我是这么认为的）
                     int term_of_local_entry_with_prelog_index = entries_.get(prelog_index).term();
@@ -474,14 +484,14 @@ void RaftServer::react2ae(AppendEntryRpc rpc_ae) {
                         entries_.insert(prelog_index + 1, entry);
                         // we choose the smaller one to be the commit index, the logic is in entries_.update_commit_index function
                         follower_update_commit_index(commit_index, prelog_index);
-                        make_resp_ae(true, "成功insert", server, rpc_lsn);
+                        make_resp_ae(true, "成功insert", server, rpc_lsn, is_empty_ae);
                         return;
                     } else if (term_of_local_entry_with_prelog_index < prelog_term) {
                         // easy to make an example
-                        make_resp_ae(false, "react2ae, term is ok, but follower's entry's term" + to_string(term_of_local_entry_with_prelog_index) + "of prelog_index " + to_string(prelog_index) + "is SMALLER than rpc's prelog_term" + to_string(prelog_term), server, rpc_lsn);
+                        make_resp_ae(false, "react2ae, term is ok, but follower's entry's term" + to_string(term_of_local_entry_with_prelog_index) + "of prelog_index " + to_string(prelog_index) + "is SMALLER than rpc's prelog_term" + to_string(prelog_term), server, rpc_lsn, is_empty_ae);
                         return;
                     } else {
-                        make_resp_ae(false, "react2ae, term is ok, but follower's entry's term" + to_string(term_of_local_entry_with_prelog_index) + "of prelog_index " + to_string(prelog_index) + "is BIGGER than rpc's prelog_term" + to_string(prelog_term), server, rpc_lsn);
+                        make_resp_ae(false, "react2ae, term is ok, but follower's entry's term" + to_string(term_of_local_entry_with_prelog_index) + "of prelog_index " + to_string(prelog_index) + "is BIGGER than rpc's prelog_term" + to_string(prelog_term), server, rpc_lsn, is_empty_ae);
                         return;
                         /*
                          * 1. 5 nodes with term 1, index [2]
@@ -595,7 +605,7 @@ void RaftServer::make_resp_rv(bool vote, string context_log, tuple<string, int> 
     writeTo(RESP_VOTE, server, msg);
 }
 
-void RaftServer::make_resp_ae(bool ok, string context_log, tuple<string, int> server, int lsn) {
+void RaftServer::make_resp_ae(bool ok, string context_log, tuple<string, int> server, int lsn, bool is_empty_ae) {
     Log_trace << "begin";
     Resp_AppendEntryRpc resp_entry;
     resp_entry.set_ok(ok);
@@ -603,6 +613,7 @@ void RaftServer::make_resp_ae(bool ok, string context_log, tuple<string, int> se
     resp_entry.set_lsn(lsn);
     resp_entry.set_ip(ip_);
     resp_entry.set_port(port_);
+    resp_entry.set_is_empty_ae(is_empty_ae);
     string msg;
     resp_entry.SerializeToString(&msg);
     writeTo(RESP_APPEND, server, msg);
@@ -621,35 +632,45 @@ inline void RaftServer::primary_deal_resp_ae_with_same_term(const tuple<string, 
     } else {
         bool ok = resp_ae.ok();
         int last_send_index = nextIndex_[server];
+        Log_debug << "ok: " << ok << ", last_send_index: " << last_send_index << ", entries.size(): " << entries_.size();
+        // whether send next entry immediately is determined by primary_deal_resp_ae, but whether to build an empty ae is determinde by AE()
+
         if (ok) {
-            Log_debug << "last_send_index: " << last_send_index;
-            Log_debug << "entries.size(): " << entries_.size();
-            // whether send next entry immediately is determined by primary_deal_resp_ae, but whether to build an empty ae is determinde by AE()
-            if (last_send_index >= entries_.size() || (last_send_index < 0 && entries_.size() == 0)) {
+            if (last_send_index > entries_.size()) {
+                throw_line("last_send_index 不可能大于entry_size");
+            }
+            if (last_send_index == entries_.size()) {
                 //don't nextIndex_[server] = last_send_index + 1;
-                Log_debug << "here1!";
-                // > or -1 , we don't send next index immediately, let the timers expires and send empty rps_ae as heartbeat, that situation 2 in AE()
+                Log_debug << "primary has send all index that can be sent, just wait for retry time to expire to send an empty AE(remember check the follower_saved_index)";
             } else {
-                nextIndex_[server] = last_send_index + 1;
-                Log_debug << "primary's nextIndex of " << server2str(server) << " is set to " << nextIndex_[server];
-                primary_update_commit_index(server, last_send_index);
-                if (last_send_index == entries_.size()) {
-                    Log_debug << "here2!"; //这里其实是不可能，可删除
-                    // = , we don't send next index immediately, let the timers expires and send empty rps_ae as heartbeat, that situation 2 in AE()
-                } else {
-                    Log_debug << "here3!";
-                    retry_timers_[server]->get_core().expires_at(boost::posix_time::min_date_time);
-                    // immediately the next AE
-                    AE(server);
+                /* why we must known the context of rpc (specifically, when received a resp_rpc, we must known the call rpc), why? here is the scene:
+                 * Scene 1:
+                 *    P and F steady with [0], P haven't send any empty AE as HB, client apply [1], P AE with [1], P received resp_ae,
+                 *    ok:1, last_send_index: 1, follower_saved_index: 0, entry size: 2. P should add nextIndex to 2.
+                 * Scene 2:
+                 *    P and F steady with [0], P send empty AE as HB, client apply [1], P received resp_ae,
+                 *    ok:1, last_send_index: 1, follower_saved_index: 0, entry size: 2. It is completely same with scene 1, but P should add nextIndex to 2,
+                 *    P should stay nextIndex to 1, and immediately trigger the next AE to send rpc_ae with entry [1].
+                 *    That's why we need extra information (the call of AE)
+                 */
+                if (resp_ae.is_empty_ae()) {  //last AE is empty, a HB
+                    Log_debug << "scence 2 happend";
+                } else {   //last send is AE with entry
+                    nextIndex_[server] = last_send_index + 1;
+                    Log_debug << "primary's nextIndex of " << server2str(server) << " is set to " << nextIndex_[server];
+                    primary_update_commit_index(server, last_send_index);
                 }
+                Log_debug << "let's send the next AE immediately";  //两种情况都需要立刻重新发送下一次AE
+                retry_timers_[server]->get_core().expires_at(boost::posix_time::min_date_time);
+                AE(server);
+
             }
         } else {
             /* ok == false, but there may be many possibilities, like remote server encouters disk error, what should it do(one way is just crash, no response, so primary will not push back the index to send)
              * so we must ensure !!!!!!!!!!!!! the remote return resp_ae( ok =false ) only in one situation, that prev_index(stored remote) != rpc_index(in AE) -1, any other (disk failure, divide 0) will never return false! just crash it.
              */
-            if (last_send_index <= 0) {
-                // don't nextIndex_[server] = last_send_index - 1;
-                // do nothing, let the timers expires
+            if (last_send_index == 0) {
+                throw_line("P sends F a AE with index 0 (maybe with index 0 or emtry), F returns not ok, impossible");
             } else {
                 nextIndex_[server] = last_send_index - 1;
                 retry_timers_[server]->get_core().cancel();
@@ -715,7 +736,7 @@ inline void RaftServer::primary_update_commit_index(const tuple<string, int> &se
 }
 
 inline void RaftServer::follower_update_commit_index(int remote_commit_index, int remote_prelog_index) {
-    Log_trace << "begin: remote_commit_index: " << remote_commit_index << ", remote_prelog_index: " << remote_prelog_index;
+    Log_trace << "begin: remote_commit_index: " << remote_commit_index << ", local commit_index: " << commit_index_ << ", remote_prelog_index: " << remote_prelog_index;
     int smaller_index = smaller(remote_commit_index, remote_prelog_index);
     if (smaller_index > commit_index_) {
         commit_index_ = smaller_index;

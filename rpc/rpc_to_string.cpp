@@ -54,7 +54,8 @@ string resp_ae2str(const Resp_AppendEntryRpc &resp) {
         << "\nterm: " << resp.term()
         << "\nlsn: " << resp.lsn()
         << "\nip: " << resp.ip()
-        << "\nport: " << resp.port();
+        << "\nport: " << resp.port()
+        << "\nis_empty_ae: " << resp.is_empty_ae();
     string s = oss.str();
     return s;
 }

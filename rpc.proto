@@ -25,6 +25,17 @@ message Resp_AppendEntryRpc {
     int32 lsn = 3;
     string ip = 4;
     int32 port = 5;
+    /* why we must known the context of rpc (specifically, when received a resp_rpc, we must known the call rpc), why? here is the scene:
+ * Scene 1:
+ *    P and F steady with [0], P haven't send any empty AE as HB, client apply [1], P AE with [1], P received resp_ae,
+ *    ok:1, last_send_index: 1, follower_saved_index: 0, entry size: 2. P should add nextIndex to 2.
+ * Scene 2:
+ *    P and F steady with [0], P send empty AE as HB, client apply [1], P received resp_ae,
+ *    ok:1, last_send_index: 1, follower_saved_index: 0, entry size: 2. It is completely same with scene 1, but P should add nextIndex to 2,
+ *    P should stay nextIndex to 1, and immediately trigger the next AE to send rpc_ae with entry [1].
+ *    That's why we need extra information (the call of AE)
+ */
+    bool is_empty_ae = 6;
 }
 
 

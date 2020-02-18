@@ -13,7 +13,7 @@
 #define Log_debug       BOOST_LOG_TRIVIAL(debug) << __FILE__ << " [" << __FUNCTION__ << "] "
 #define Log_info         BOOST_LOG_TRIVIAL(info) << __FILE__ << " [" << __FUNCTION__ << "] "
 #define Log_warning        BOOST_LOG_TRIVIAL(warning) << __FILE__ << " [" << __FUNCTION__ << "] "
-#define Log_error       BOOST_LOG_TRIVIAL(error) <<__FILE__ << " [" << __FUNCTION__ << "] "
+#define Log_error       BOOST_LOG_TRIVIAL(error) <<__FILE__ << ":" <<__LINE__<< " [" << __FUNCTION__ << "] "
 #define Log_fatal         BOOST_LOG_TRIVIAL(fatal) <<__FILE__ << " [" << __FUNCTION__ << "] "
 
 
@@ -41,16 +41,19 @@ class my_exception : public std::runtime_error {  //https://stackoverflow.com/a/
     std::string msg;
 public:
     my_exception(const std::string &arg, const char *file, int line) :
-    std::runtime_error(arg) {
+            std::runtime_error(arg) {
         std::ostringstream o;
         o << file << ":" << line << ": " << arg;
         msg = o.str();
     }
-    ~my_exception() throw() {}
-    const char *what() const throw() {
+
+    ~my_exception() noexcept = default;
+
+    const char *what() const noexcept {
         return msg.c_str();
     }
 };
+
 #define throw_line(arg) throw my_exception(arg, __FILE__, __LINE__);
 
 #endif //RAFT_UTIL_H

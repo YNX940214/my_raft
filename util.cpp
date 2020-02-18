@@ -2,9 +2,6 @@
 // Created by ynx on 2019-11-19.
 //
 
-#ifndef RAFT_UTIL_H
-#define RAFT_UTIL_H
-
 #include "util.h"
 #include <iostream>
 #include <string>
@@ -84,4 +81,3 @@ std::tuple<string, int> get_socket_local_ip_port(std::shared_ptr<boost::asio::ip
     return std::make_tuple(local_ep.address().to_string(), local_ep.port());
 }
 
-#endif //RAFT_UTIL_H
