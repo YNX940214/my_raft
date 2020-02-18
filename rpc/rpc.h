@@ -17,6 +17,8 @@ class RaftServer;
 
 typedef std::function<void(RPC_TYPE, string, std::shared_ptr<tcp::socket>)> incoming_rpc_callback;
 
+class connection;
+
 class RPC {
 public:
     RPC(boost::asio::io_context &io, const tcp::endpoint &endpoint, incoming_rpc_callback cb);
@@ -42,7 +44,7 @@ private:
     };
 //    std::function<void(boost::system::error_code &ec, std::size_t)> write_cb_; //for now, we dont' need it
     boost::asio::io_context &io_;
-    SocketMap sockets_map_;
+    std::map<std::tuple<string, int>, std::shared_ptr<connection>> connection_map_;
     incoming_rpc_callback cb_;
     char big_char[max_body_length];
     char meta_char[4];

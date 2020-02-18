@@ -37,7 +37,7 @@ add_executable(raft
         rpc/rpc_to_string.cpp
         rpc/rpc_type.h
         rpc/SocketMap.cpp
-        rpc/SocketMap.h)
+        rpc/SocketMap.h rpc/connection.cpp rpc/connection.h)
 if (protobuf_MODULE_COMPATIBLE) #Legacy mode
     target_include_directories(raft PUBLIC ${PROTOBUF_INCLUDE_DIRS})
     target_link_libraries(raft ${PROTOBUF_LIBRARIES})
