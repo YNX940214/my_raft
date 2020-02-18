@@ -50,6 +50,7 @@ void RPC::make_rpc_call(RPC_TYPE rpc_type, const std::tuple<string, int> &server
                 if (error) {
                     Log_error << "async_connect, error: " << error.message();
                 } else {
+                    Log_debug << 1;
                     Log_trace << "async_connect to: " << server2str(get_socket_remote_ip_port(sp));
                     sockets_map_.insert(sp);
                     add_header_then_write_and_hook(sp, rpc_msg, server);
@@ -73,6 +74,7 @@ void RPC::startAccept() {
 }
 
 void RPC::accept_callback(const boost::system::error_code &error, std::shared_ptr<tcp::socket> peer) {
+    Log_debug << 2;
     Log_trace << "begin, error: " << error.message() << ", peer: " << server2str(get_socket_remote_ip_port(peer));
     if (error) {
         Log_error << "error: " << error.message();
@@ -92,7 +94,13 @@ void RPC::read_header(std::shared_ptr<tcp::socket> peer) {
 }
 
 void RPC::read_body(std::shared_ptr<tcp::socket> peer, const boost::system::error_code &error, size_t bytes_transferred) {
-    Log_trace << "begin: error: " << error.message() << ", bytes_transferred: " << bytes_transferred << ", peer: " << server2str(get_socket_remote_ip_port(peer));
+    Log_debug << 3;
+    try {
+        Log_trace << "begin: error: " << error.message() << ", bytes_transferred: " << bytes_transferred << ", peer: " << server2str(get_socket_remote_ip_port(peer));
+    } catch (std::exception &exception) {
+        sockets_map_.remove(peer);
+        return;
+    }
     if (error) {
         Log_error << "error: " << error.message();
         if (error == boost::asio::error::eof) {
@@ -114,6 +122,7 @@ void RPC::read_body(std::shared_ptr<tcp::socket> peer, const boost::system::erro
 
 
 void RPC::body_callback(std::shared_ptr<tcp::socket> peer, const boost::system::error_code &error, size_t bytes_transferred) {
+    Log_debug << 4;
     Log_trace << "begin" << ", peer: " << server2str(get_socket_remote_ip_port(peer));
     if (error) {
         Log_error << "error: " << error.message();

@@ -72,8 +72,23 @@ string server2str(const std::tuple<string, int> &server) {
 
 std::tuple<string, int> get_socket_remote_ip_port(std::shared_ptr<boost::asio::ip::tcp::socket> peer) {
     //todo maybe more robust
-    const auto &remote_ep = peer->remote_endpoint();
-    return std::make_tuple(remote_ep.address().to_string(), remote_ep.port());
+    try {
+        boost::system::error_code ec;
+        Log_debug << "is peer open? : " << peer->is_open();
+        if (peer->is_open()) {
+            Log_debug << 11;
+            const auto &remote_ep = peer->remote_endpoint();
+            Log_debug << 12;
+            auto temp = std::make_tuple(remote_ep.address().to_string(), remote_ep.port());
+            Log_debug << 13;
+            return temp;
+        } else {
+            return std::make_tuple("closed", -1);
+        }
+    } catch (std::exception &exception) {
+//        Log_error << exception.what();
+        throw_line(exception.what());
+    }
 }
 
 std::tuple<string, int> get_socket_local_ip_port(std::shared_ptr<boost::asio::ip::tcp::socket> peer) {

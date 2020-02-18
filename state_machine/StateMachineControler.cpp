@@ -58,6 +58,7 @@ void StateMachineControler::post_resp_apply_call(int entry_index, const string &
 }
 
 void StateMachineControler::post_resp_query_call(std::shared_ptr<tcp::socket> socket, const string &res_str) {
+    Log_debug << 9;
     Log_trace << "post to ioContext of resp_query_call to " << server2str(get_socket_remote_ip_port(socket));
     io_service_.post(std::bind(&RaftServer::write_resp_query_call, raft_server_, socket, res_str));
 }

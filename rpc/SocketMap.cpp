@@ -17,6 +17,8 @@ std::shared_ptr<tcp::socket> SocketMap::get(const std::tuple<string, int> &addr)
 }
 
 void SocketMap::insert(std::shared_ptr<tcp::socket> sp) {
+    Log_trace << "begin";
+    Log_debug << 5;
     const auto &remote = get_socket_remote_ip_port(sp);
     const auto &local = get_socket_local_ip_port(sp);
     Log_trace << "inserting remote endpoint " << server2str(remote) << ", local endpoint " << server2str(local) << " into socket map";
@@ -29,7 +31,11 @@ void SocketMap::remove(const std::tuple<string, int> &addr) {
 }
 
 void SocketMap::remove(std::shared_ptr<tcp::socket> peer) {
+    Log_trace << "begin";
+    Log_debug << 6;
     const auto &addr = get_socket_remote_ip_port(peer);
-    Log_trace << "removing " << server2str(addr) << " from socket map";
+    const auto &local = get_socket_local_ip_port(peer);
+    Log_trace << "removing socket from socket map";
+//    local endpoint: " << server2str(local) << ", remote endpoint: " << server2str(addr);
     map_.erase(addr);
 }

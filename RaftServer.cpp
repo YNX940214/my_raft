@@ -424,6 +424,7 @@ void RaftServer::append_client_apply_to_entries(std::shared_ptr<tcp::socket> cli
     Log_trace << "begin";
     rpc_Entry entry;
     int index = entries_.size();
+    Log_debug << 7;
     entryIndex_to_socketAddr_map_[index] = get_socket_remote_ip_port(client_peer);
     entry.set_term(term_);
     entry.set_index(index);
@@ -765,6 +766,7 @@ void RaftServer::write_resp_apply_call(int entry_index, const string res_str) {
 }
 
 void RaftServer::write_resp_query_call(std::shared_ptr<tcp::socket> socket, const string res_str) {
+    Log_debug << 8;
     const auto &remote_addr = get_socket_remote_ip_port(socket);
     network_.make_rpc_call(RESP_CLIENT_QUERY, remote_addr, res_str);
 }

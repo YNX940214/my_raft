@@ -5,7 +5,7 @@ void init_logging(int port) {
 
     logging::add_file_log(
             keywords::file_name = "log" + std::to_string(port),
-            keywords::format = "[%TimeStamp%] [%Severity%] [%LineID%] %Message%",
+            keywords::format = "[%TimeStamp%] [%ThreadID%] [%Severity%] [%LineID%] %Message%",
             keywords::auto_flush = true
     );
     // [%ThreadID%]
