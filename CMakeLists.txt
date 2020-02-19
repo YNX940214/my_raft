@@ -33,11 +33,9 @@ add_executable(raft
         state_machine/easy_state_machine.pb.cc
         state_machine/EasyStateMachine.cpp
         RaftServer.cpp
-        rpc/rpc_to_string.h
         rpc/rpc_to_string.cpp
         rpc/rpc_type.h
-        rpc/SocketMap.cpp
-        rpc/SocketMap.h rpc/connection.cpp rpc/connection.h)
+        rpc/connection.cpp)
 if (protobuf_MODULE_COMPATIBLE) #Legacy mode
     target_include_directories(raft PUBLIC ${PROTOBUF_INCLUDE_DIRS})
     target_link_libraries(raft ${PROTOBUF_LIBRARIES})
@@ -62,9 +60,9 @@ add_executable(client client/main.cpp
         state_machine/easy_state_machine.proto
         state_machine/easy_state_machine.pb.cc
         rpc.pb.cc
-        rpc/SocketMap.cpp
         rpc/rpc_to_string.cpp
         rpc/rpc.cpp
+        rpc/connection.cpp
         rpc.proto
         state_machine/EasyStateMachine.cpp)
 target_link_libraries(client protobuf::libprotobuf

@@ -37,41 +37,17 @@ void StateMachineControler::apply_to_state_machine(int index_to_apply) {
     const string &encoded_apply_str = entry.msg();
     write_thread_pool_.enqueue([this, encoded_apply_str, index_to_apply]() {//注意这列必须复制这个_applied_index
         const string &sm_apply_res_str = this->state_machine_->apply(encoded_apply_str);
-        this->post_resp_apply_call(index_to_apply, sm_apply_res_str);
+        io_service_.post(std::bind(&RaftServer::write_resp_apply_call, raft_server_, index_to_apply, sm_apply_res_str));
     });
     applied_index_ = index_to_apply;
 }
 
 
 //调用上级是 接收到client的请求，能直接感知到client的socket
-void StateMachineControler::get_from_state_machine(const string &encoded_query_str, std::shared_ptr<tcp::socket> client_socket) {
+void StateMachineControler::get_from_state_machine(const string &encoded_query_str, const tuple<string, int> &client_addr) {
     Log_trace << " pushing client query to thread pool to find out the state machine";
-    read_thread_pool.enqueue([this, encoded_query_str, client_socket] {
+    read_thread_pool.enqueue([this, encoded_query_str, client_addr] {
         const string &sm_query_res_str = this->state_machine_->get(encoded_query_str);
-        this->post_resp_query_call(client_socket, sm_query_res_str);
+        io_service_.post(std::bind(&RaftServer::write_resp_query_call, raft_server_, client_addr, sm_query_res_str));
     });
 }
-
-void StateMachineControler::post_resp_apply_call(int entry_index, const string &res_str) {
-    Log_trace << "post to ioContext of resp_apply_call of entry index " << entry_index;
-    io_service_.post(std::bind(&RaftServer::write_resp_apply_call, raft_server_, entry_index, res_str));
-}
-
-void StateMachineControler::post_resp_query_call(std::shared_ptr<tcp::socket> socket, const string &res_str) {
-    Log_trace << "post to ioContext of resp_query_call to " << server2str(get_socket_remote_ip_port(socket));
-    io_service_.post(std::bind(&RaftServer::write_resp_query_call, raft_server_, socket, res_str));
-}
-
-
-//void StateMachineControler::callback_write_back_to_client(const boost::system::error_code &error, std::size_t bytes_transferred, std::shared_ptr<tcp::socket> client_socket_sp, int client_map_key) {
-//    Log_trace << "called with error: " << error.message() << ", peer: " << server2str(get_socket_remote_ip_port(client_socket_sp));
-//    if (!error) {
-//        Log_trace << "succeeded";
-//    } else {
-//        if (client_map_key != -1) {
-//            Log_debug << "error: " << error.message() << "remove socket from client_map with key: " << client_map_key;
-//        } else {
-//            //shared_ptr should release the socket
-//        }
-//    }
-//}

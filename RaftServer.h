@@ -59,11 +59,11 @@ private:
 
     void RV(const tuple<string, int> &server);
 
-    void reactToIncomingMsg(RPC_TYPE _rpc_type, const string msg, std::shared_ptr<tcp::socket> client_socket_sp);
+    void reactToIncomingMsg(RPC_TYPE _rpc_type, const string msg, const tuple<string, int> &peer_addr);
 
-    void get_from_state_machine(std::shared_ptr<tcp::socket> client_peer, string client_query_str);
+    void get_from_state_machine(const tuple<string, int> &client_addr, string client_query_str);
 
-    void append_client_apply_to_entries(std::shared_ptr<tcp::socket> client_peer, string apply_str);
+    void append_client_apply_to_entries(const tuple<string, int> &client_addr, string apply_str);
 
     void react2ae(AppendEntryRpc rpc_ae);
 
@@ -90,13 +90,12 @@ private:
     // 不过我选择在主用follower_saved_index做一次判断再发来commit_index，做一个鱼类，让从暴露出我们的逻辑问题
     inline void follower_update_commit_index(int remote_commit_index, int remote_prelog_index);
 
-    void writeTo(RPC_TYPE rpc_type, const tuple<string, int> &server, const string &msg);
-
-    void deal_with_write_error(boost::system::error_code &ec, std::size_t);
 
     void write_resp_apply_call(int entry_index, const string res_str);
 
-    void write_resp_query_call(std::shared_ptr<tcp::socket> socket, const string res_str);
+    void write_resp_query_call(const std::tuple<string, int> &addr, const string res_str);
+
+    //    void deal_with_write_error(boost::system::error_code &ec, std::size_t);
 
 private:
     int winned_votes_;

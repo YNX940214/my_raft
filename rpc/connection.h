@@ -15,7 +15,7 @@ using std::tuple;
 
 class RPC;
 
-class connection : std::enable_shared_from_this<connection> {
+class connection : public std::enable_shared_from_this<connection> {
 private:
     RPC &rpc_;
     tcp::socket socket_;
@@ -26,11 +26,21 @@ private:
     string local_addr_;
     int local_port_;
 public:
+    //passive make connection
     connection(tcp::socket socket, RPC &rpc);
+
+    //positive make connection
+    connection(const tuple<string, int> &remote_server_addr, boost::asio::io_service &ioContext, RPC &rpc);
+
+    void connect(std::function<void()> cb, const string &msg);
+
+    ~connection();
 
     void start();
 
     void deliver(const string &msg);
+
+    tuple<string, int> remote_addr();
 
     string remote_addr_str();
 
@@ -46,7 +56,6 @@ private:
     char header_[4];
     char data_[1024 * 5];
 
-    ~connection();
 };
 
 

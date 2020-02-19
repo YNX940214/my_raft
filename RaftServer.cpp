@@ -290,7 +290,7 @@ void RaftServer::AE(const tuple<string, int> &server) {
     shared_ptr<Timer> t1 = retry_timers_[server];
     string ae_rpc_str = build_rpc_ae_string(server);
     //考虑如下场景，发了AE1,index为100,然后定时器到期重发了AE2,index为100，这时候收到ae1的resp为false，将index--,如果ae2到F，又触发了一次resp，这两个rpc的请求一样，resp一样，但是P收到两个一样的resp会将index--两次，所以需要rpc_lsn的存在
-    writeTo(APPEND_ENTRY, server, ae_rpc_str);
+    network_.make_rpc_call(APPEND_ENTRY, server, ae_rpc_str);
 
     int waiting_counts = t1->get_core().expires_from_now(boost::posix_time::milliseconds(random_ae_retry_expire()));
     if (waiting_counts != 0) {
@@ -349,7 +349,7 @@ void RaftServer::RV(const tuple<string, int> &server) {
     shared_ptr<Timer> timer = retry_timers_[server];
 
     string rv_rpc_str = build_rpc_rv_string(server);
-    writeTo(REQUEST_VOTE, server, rv_rpc_str);
+    network_.make_rpc_call(REQUEST_VOTE, server, rv_rpc_str);
     int waiting_counts = timer->get_core().expires_from_now(boost::posix_time::milliseconds(random_rv_retry_expire()));
     if (waiting_counts != 0) {
         /*
@@ -389,7 +389,7 @@ void RaftServer::RV(const tuple<string, int> &server) {
 }
 
 
-void RaftServer::reactToIncomingMsg(RPC_TYPE _rpc_type, const string msg, std::shared_ptr<tcp::socket> client_socket_sp) {
+void RaftServer::reactToIncomingMsg(RPC_TYPE _rpc_type, const string msg, const tuple<string, int> &peer_addr) {
     Log_debug << "begin: RPC_TYPE: " << _rpc_type;
     if (_rpc_type == REQUEST_VOTE) {
         RequestVoteRpc rv;
@@ -408,23 +408,23 @@ void RaftServer::reactToIncomingMsg(RPC_TYPE _rpc_type, const string msg, std::s
         resp_ae.ParseFromString(msg);
         react2resp_ae(resp_ae);
     } else if (_rpc_type == CLIENT_APPLY) {
-        append_client_apply_to_entries(client_socket_sp, msg);
+        append_client_apply_to_entries(peer_addr, msg);
     } else if (_rpc_type == CLIENT_QUERY) {
-        get_from_state_machine(client_socket_sp, msg);
+        get_from_state_machine(peer_addr, msg);
     } else {
         Log_error << "unknown rpc_type";
     }
 }
 
-void RaftServer::get_from_state_machine(std::shared_ptr<tcp::socket> client_peer, string client_query_str) {
-    smc_.get_from_state_machine(client_query_str, client_peer);
+void RaftServer::get_from_state_machine(const tuple<string, int> &client_addr, string client_query_str) {
+    smc_.get_from_state_machine(client_query_str, client_addr);
 }
 
-void RaftServer::append_client_apply_to_entries(std::shared_ptr<tcp::socket> client_peer, string apply_str) {
-    Log_trace << "begin";
+void RaftServer::append_client_apply_to_entries(const tuple<string, int> &client_addr, string apply_str) {
+    Log_trace << "begin, client_addr: " << server2str(client_addr);
     rpc_Entry entry;
     int index = entries_.size();
-    entryIndex_to_socketAddr_map_[index] = get_socket_remote_ip_port(client_peer);
+    entryIndex_to_socketAddr_map_[index] = client_addr;
     entry.set_term(term_);
     entry.set_index(index);
     entry.set_msg(apply_str);
@@ -602,7 +602,7 @@ void RaftServer::make_resp_rv(bool vote, string context_log, tuple<string, int> 
     resp_vote.set_port(port_);
     string msg;
     resp_vote.SerializeToString(&msg);
-    writeTo(RESP_VOTE, server, msg);
+    network_.make_rpc_call(RESP_VOTE, server, msg);
 }
 
 void RaftServer::make_resp_ae(bool ok, string context_log, tuple<string, int> server, int lsn, bool is_empty_ae) {
@@ -616,7 +616,7 @@ void RaftServer::make_resp_ae(bool ok, string context_log, tuple<string, int> se
     resp_entry.set_is_empty_ae(is_empty_ae);
     string msg;
     resp_entry.SerializeToString(&msg);
-    writeTo(RESP_APPEND, server, msg);
+    network_.make_rpc_call(RESP_APPEND, server, msg);
 }
 
 
@@ -750,21 +750,16 @@ inline void RaftServer::follower_update_commit_index(int remote_commit_index, in
     }
 }
 
-void RaftServer::writeTo(RPC_TYPE rpc_type, const tuple<string, int> &server, const string &msg) {
-    network_.make_rpc_call(rpc_type, server, msg);
-}
-
-void RaftServer::deal_with_write_error(boost::system::error_code &ec, std::size_t) {
-    Log_error << " error: " << ec.message();
-}
-
 
 void RaftServer::write_resp_apply_call(int entry_index, const string res_str) {
     const auto &remote_addr = entryIndex_to_socketAddr_map_[entry_index];
     network_.make_rpc_call(RESP_CLIENT_APPLY, remote_addr, res_str);
 }
 
-void RaftServer::write_resp_query_call(std::shared_ptr<tcp::socket> socket, const string res_str) {
-    const auto &remote_addr = get_socket_remote_ip_port(socket);
-    network_.make_rpc_call(RESP_CLIENT_QUERY, remote_addr, res_str);
+void RaftServer::write_resp_query_call(const std::tuple<string, int> &addr, const string res_str) {
+    network_.make_rpc_call(RESP_CLIENT_QUERY, addr, res_str);
 }
+
+//void RaftServer::deal_with_write_error(boost::system::error_code &ec, std::size_t) {
+//    Log_error << " error: " << ec.message();
+//}

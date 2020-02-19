@@ -64,7 +64,7 @@ void client::query_from_server() {
     network_.make_rpc_call(CLIENT_QUERY, server_, query_str);
 }
 
-void client::react_to_resp(RPC_TYPE rpc_type, const string &resp_str, std::shared_ptr<tcp::socket> socket) {
+void client::react_to_resp(RPC_TYPE rpc_type, const string &resp_str, const tuple<string, int> &addr) {
     if (rpc_type == RESP_CLIENT_APPLY) {
         react_to_resp_apply(resp_str);
     } else if (rpc_type == RESP_CLIENT_QUERY) {

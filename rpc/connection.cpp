@@ -6,7 +6,7 @@
 #include "../util.h"
 #include "rpc.h"
 
-connection::connection(const tuple<string, int> &remote_server_addr, boost::asio::io_service &ioContext, RPC rpc) :
+connection::connection(const tuple<string, int> &remote_server_addr, boost::asio::io_service &ioContext, RPC &rpc) :
         socket_(ioContext),
         rpc_(rpc) {
     remote_addr_ = std::get<0>(remote_server_addr);
@@ -14,18 +14,18 @@ connection::connection(const tuple<string, int> &remote_server_addr, boost::asio
     remote_peer_ = std::make_tuple(remote_addr_, remote_port_);
 }
 
-void connection::connect(std::function<void()> cb) {
+void connection::connect(std::function<void()> cb, const string &msg) {
     auto self = shared_from_this();
     boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::address::from_string(remote_addr_), (unsigned short) remote_port_);
-    socket_.async_connect(endpoint, [cb, self](const boost::system::error_code &error) {
+    socket_.async_connect(endpoint, [self, cb, msg](const boost::system::error_code &error) {
         Log_trace << "async connect, error: " << error.message();
         if (error) {
             Log_error << "async_connect, error: " << error.message();
         } else {
             Log_info << "connected to: " << self->remote_addr_str() << ", local: " << self->local_addr_str(); //
             self->read_header();
-            rpc_.insert(self->remote_peer_, self);
             cb();
+            self->deliver(msg);
         }
     });
 
@@ -120,4 +120,8 @@ string connection::local_addr_str() {
 
 string connection::remote_addr_str() {
     return remote_addr_ + ":" + std::to_string(remote_port_);
+}
+
+tuple<string, int> connection::remote_addr() {
+    return remote_peer_;
 }

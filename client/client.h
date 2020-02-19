@@ -20,7 +20,7 @@ public:
 
     void query_from_server();
 
-    void react_to_resp(RPC_TYPE rpc_type, const string &resp_str, std::shared_ptr<tcp::socket> socket);
+    void react_to_resp(RPC_TYPE rpc_type, const string &resp_str, const tuple<string, int> &addr);
 
     void react_to_resp_query(const string &resp_query_str);
 
