@@ -78,6 +78,7 @@ target_link_libraries(client protobuf::libprotobuf
 #add_executable(state_machine_controler state_machine/StateMachineControler.cpp)
 
 
+#add_executable(stack_print tests/test_exception_stack_print.cpp)
 #add_executable(test_read_file tests/test_read_file.cpp)
 
 #add_executable(test_map_insert tests/test_map_insert.cpp)

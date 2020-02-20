@@ -2,5 +2,18 @@ debug
 next_index有bug导致 entry从0到1，也不能真确的发出AE
 
 
+debug
+Scene:
+P send [0],[1],[2] to F, all resp_ae with ok, everything is fine, so F's commit index is 2, then, a lost
+tcp [0] finally reached F, the AE's commit index is -1, its prelog index is -1, F crashed(for its commit index is bigger than -1),
+how ever the AE is legal (of course Follower can't accpet it because it prelog is null, this satisfies raft protocol)
+There are many ways to choose to solve this problem:
+1. follower stores rpc lsn with server's, the lagging rpc will be droped.
+2. for [1] is committed, any AE of which log is <= 1 is denied
+3. just drop the [1] [2], rebuild every log from [0] (off course, P will not take the resp of lagging AE into
+ serious because P knows the rpc lsn is lagged, but it have to move its nextIndex to F back to [1] step by step in the following AEs)
+
+todo Let's see how does braft deal this?
+
 # to review
 别人是如何分离server与server之间，server与client之间的socket管理的

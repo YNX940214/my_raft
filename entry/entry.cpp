@@ -88,6 +88,7 @@ void Entries::append(const rpc_Entry &entry) {
 }
 
 void Entries::insert(unsigned int index, const rpc_Entry &entry) {
+    Log_debug << "entry insert begin, index: " << index;
     if (index > size_) {
         std::ostringstream oss;
         oss << "the etries's size is " << size_ << ", the insert index is " << index << ", which is bigger";
