@@ -13,6 +13,7 @@ int main(int argc, char **argv) {
         raft_RaftServer.run();
     } catch (std::exception &exception) {
         Log_fatal << "exception: " << exception.what();
+        throw exception;
     }
     return 0;
 }

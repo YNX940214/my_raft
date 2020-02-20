@@ -31,9 +31,9 @@ bool file_exists(const string &path);
 
 string server2str(const std::tuple<string, int> &server);
 
-std::tuple<string, int> get_socket_remote_ip_port(std::shared_ptr<boost::asio::ip::tcp::socket> peer);
+//std::tuple<string, int> get_socket_remote_ip_port(std::shared_ptr<boost::asio::ip::tcp::socket> peer);
 
-std::tuple<string, int> get_socket_local_ip_port(std::shared_ptr<boost::asio::ip::tcp::socket> peer);
+//std::tuple<string, int> get_socket_local_ip_port(std::shared_ptr<boost::asio::ip::tcp::socket> peer);
 
 std::vector<string> split_str_boost(const string &s, char delim);
 

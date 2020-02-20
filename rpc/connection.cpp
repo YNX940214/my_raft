@@ -24,6 +24,7 @@ void connection::connect(std::function<void()> cb, const string &msg) {
         if (error) {
             Log_error << "async_connect, error: " << error.message();
         } else {
+            Log_debug << "local called";
             const auto &lp = self->socket_.local_endpoint();
             self->local_addr_ = lp.address().to_string();
             self->local_port_ = lp.port();
@@ -40,17 +41,19 @@ connection::connection(tcp::socket socket, RPC &rpc) :
         socket_(std::move(socket)),
         rpc_(rpc) {
     try {
+        Log_debug << "remote_ep called";
         const auto &remote_peer = socket_.remote_endpoint();
         remote_addr_ = remote_peer.address().to_string();
         remote_port_ = remote_peer.port();
         remote_peer_ = std::make_tuple(remote_addr_, remote_port_);
 
+        Log_debug << "local_ep called";
         const auto &local_peer = socket_.local_endpoint();
         local_addr_ = local_peer.address().to_string();
         local_port_ = local_peer.port();
         Log_info << "connection between local " << local_addr_ << ":" << local_port_ << " and remote " << remote_addr_ << ":" << remote_port_ << " constructed";
     } catch (std::exception &exp) {
-        Log_error << "error happend when constructing an connection: " << exp.what();
+        Log_error << "error happened when constructing an connection: " << exp.what();
     }
 }
 

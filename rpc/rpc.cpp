@@ -127,7 +127,7 @@ void RPC::remove(const tuple<string, int> &remote_peer) {
     Log_trace << "removing connection, remote:" << server2str(remote_peer);
     if (connection_map_.find(remote_peer) == connection_map_.end()) {
         Log_error << "can't find key " << server2str(remote_peer) << " in the map, that's an manager error";
-        throw_line("can't find key in map, check log");
+        //todo  throw_line("can't find key in map, check log");
     }
     connection_map_.erase(remote_peer);
 }
