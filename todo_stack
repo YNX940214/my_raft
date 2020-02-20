@@ -4,7 +4,7 @@ next_index有bug导致 entry从0到1，也不能真确的发出AE
 
 debug
 Scene:
-P send [0],[1],[2] to F, all resp_ae with ok, everything is fine, so F's commit index is 2, then, a lost
+P send [0],[1],[2] to F, all resp_ae with ok, everything is fine, so F's commit index is 2, then, a stale
 tcp [0] finally reached F, the AE's commit index is -1, its prelog index is -1, F crashed(for its commit index is bigger than -1),
 how ever the AE is legal (of course Follower can't accpet it because it prelog is null, this satisfies raft protocol)
 There are many ways to choose to solve this problem:
