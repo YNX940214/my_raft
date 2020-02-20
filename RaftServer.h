@@ -41,6 +41,15 @@ public:
     void write_to_client(std::shared_ptr<tcp::socket> socket, const string res_str);
 
 private:
+    /*
+     * return True the rpc lsn is smaller than local stored lsn, we should ignore it.
+     */
+    bool should_ignore_remote_rpc(const tuple<string, int> &remote, int new_lsn);
+
+    void reset_both_rpc_lsn();
+
+    void update_term(int term);
+
     void load_config_from_file();
 
     void cancel_all_timers();
@@ -112,13 +121,34 @@ private:
     vector<std::tuple<string, int>> configuration_;
     int majority_;
     int N_;
+
+
     //rpc
     string ip_;
     int port_;
     tcp::endpoint listen_point_;
     std::tuple<string, int> server_;
-    map<std::tuple<string, int>, int> current_rpc_lsn_; //if resp_rpc's lsn != current[server]; then just ignore; (send back the index can't not ensuring idempotence; for example we received a resp which wandereding in the network for 100 years)
     RPC network_;
+
+    /*
+     * both there rpcs should be reset when term grows, (but AE or HB will trans F to F with same
+     * term, but that shouldn't reset the followers rpc_lsn for example), this lsn is just used to ensure
+     * stale rpc or resp_rpc within the same term will not be reacted, the term always has a high logic process priority
+     * than rpc lsn, because the logic deal with term will block the stale rpc and resps with lower term,
+     *
+     *
+     *
+     * So !!! Remember！！！！ ALWAYS put the logic check of lsn BEHIND term checks!!!!! 令我惊讶的是在我写完前一句话的时候去检查了一下以前的逻辑，竟然是符合lsn在term之后的
+     *
+     * AND!! reset all both lsn when term grows!
+     *
+     */
+
+    // this rpc_lsn can only be modified by P, this is used to deal with stale resp_ae or stale resp_rv, P will not react to stale resps,
+    map<std::tuple<string, int>, int> current_rpc_lsn_; //if resp_rpc's lsn != current[server]; then just ignore; (send back the index can't not ensuring idempotence; for example we received a resp which wandereding in the network for 100 years)
+    // this rpc_lsn can only be modified by F, this is used to deal with Scene 111, F will not react to stale rpc calls.
+    map<std::tuple<string, int>, int> follower_rpc_lsn_;
+
 
     //timers
     deadline_timer candidate_timer_;
@@ -128,7 +158,7 @@ private:
     int commit_index_;
     Entries entries_;
     map<tuple<string, int>, int> nextIndex_;
-    map<tuple<string, int>, int> Follower_saved_index;
+    map<tuple<string, int>, int> Follower_saved_index; // work for candidate
 
     //clients
     StateMachineControler smc_;  //定义在entries_和state_machine后面

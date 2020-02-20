@@ -26,6 +26,7 @@ RaftServer::RaftServer(io_service &loop, const string &_ip, int _port, string co
         nextIndex_[server_tuple] = 0; // -1 not 0, because at the beginning, entries[0] raise Exception,
         Follower_saved_index[server_tuple] = -1;
         current_rpc_lsn_[server_tuple] = 0;
+        follower_rpc_lsn_[server_tuple] = -1;
         auto sp = make_shared<Timer>(loop);
         retry_timers_.insert({server_tuple, sp});
     }
@@ -131,7 +132,7 @@ void RaftServer::trans2F(int term) {
     cout << __FUNCTION__ << endl;
     cancel_all_timers();
     winned_votes_ = 0;
-    term_ = term;
+    update_term(term);
     already_voted_ = false;
     state_ = follower;
     int waiting_count = candidate_timer_.expires_from_now(boost::posix_time::milliseconds(random_candidate_expire()));
@@ -187,6 +188,26 @@ void RaftServer::trans2P() {
     }
 }
 
+void RaftServer::update_term(int term) {
+    if (term > term_) {
+        Log_info << "term grows from " << term_ << " to " << term;
+        reset_both_rpc_lsn();
+        term_ = term;
+    } else if (term_ == term) {
+
+    } else {
+        throw_line("term_ can't never decreases");
+    }
+}
+
+void RaftServer::reset_both_rpc_lsn() {
+    Log_debug << "begin";
+    for (const auto &server_tuple: configuration_) {
+        current_rpc_lsn_[server_tuple] = 0;
+        follower_rpc_lsn_[server_tuple] = -1; //-1 smaller than 0, so we can ignore rpc if new lsn is equal to local stored lsn
+    }
+}
+
 void RaftServer::trans2C() {
     Log_info << "begin";
     cout << __FUNCTION__ << endl;
@@ -195,7 +216,7 @@ void RaftServer::trans2C() {
      * 刚跑起来的时候这里有个bug，rv的重传超时设置成了秒，这导致trans2candidate的时候，rv的timer还没有超时，所以再次set timer expire的时候检查hook数目不为0，属于一个被遗漏的bug，但找到后修复了，但是这
      */
     cancel_all_timers();
-    term_++;
+    update_term(term_ + 1);
     Log_info << "current term: " << term_;
     state_ = candidate;
     winned_votes_ = 1;
@@ -453,6 +474,13 @@ void RaftServer::react2ae(AppendEntryRpc rpc_ae) {
         }
         int pre_local_term = term_;
         trans2F(remote_term);//会设置定时器，所以此函数不需要设置定时器了
+
+
+        //if term_ is updated in trans2F, then both lsn are clean, if not, the store follower_saved_index is still valid
+        if (should_ignore_remote_rpc(server, rpc_lsn)) {
+            return;
+        }
+
         /*
          一开始想法是commitIndex直接赋值给本地commitIndex，然后本地有一个线程直接根据本第commitIndex闷头apply to stateMachine就行了（因为两者完全正交），
          但是一想不对，因为rpc的commitIndex可能比prelog_index大，假设本地和主同步的entry是0到20，21到100都是stale的entry，rpc传来一个commitIndex为50，prelog_index为80（还没走到真确的20），
@@ -511,6 +539,18 @@ void RaftServer::react2ae(AppendEntryRpc rpc_ae) {
     }
 }
 
+bool RaftServer::should_ignore_remote_rpc(const tuple<string, int> &remote, int new_lsn) {
+    int prev = follower_rpc_lsn_[remote];
+    Log_debug << "local stored lsn " << prev << ", remote rpc call lsn: " << new_lsn;
+    if (prev >= new_lsn) {
+        return true;
+    } else {
+        follower_rpc_lsn_[remote] = new_lsn;
+        return false;
+    }
+}
+
+
 //begin from here
 void RaftServer::react2rv(RequestVoteRpc rpc_rv) {
     Log_debug << "begin";
@@ -527,6 +567,11 @@ void RaftServer::react2rv(RequestVoteRpc rpc_rv) {
         trans2F(remote_term);
         //do not return, do logic
     }
+
+    if (should_ignore_remote_rpc(server, rpc_lsn)) {
+        return;  // no even speak
+    }
+
     if (state_ == candidate || state_ == primary) {
         make_resp_rv(false, "react2rv: term_ = remote,  write back false", server, rpc_lsn);
     } else {
@@ -654,6 +699,7 @@ inline void RaftServer::primary_deal_resp_ae_with_same_term(const tuple<string, 
                  *    ok:1, last_send_index: 1, follower_saved_index: 0, entry size: 2. It is completely same with scene 1, but P should add nextIndex to 2,
                  *    P should stay nextIndex to 1, and immediately trigger the next AE to send rpc_ae with entry [1].
                  *    That's why we need extra information (the call of AE)
+                 *    Let's see braft how to deal with it?
                  */
                 if (resp_ae.is_empty_ae()) {  //last AE is empty, a HB
                     Log_debug << "scence 2 happend";
