@@ -23,36 +23,11 @@ using std::ifstream;
 using std::ofstream;
 
 
-//Entries::Entries(int port) : data_(string(Consts::data_path) + string(".") + std::to_string(port)) {
-//    path_offset_ = string(Consts::offset_path) + string(".") + std::to_string(port);
-//    Log_debug << "调试阶段，每次都从头开始";
-//    offset_.push_back(0);
-//
-//    size_ = offset_.size() - 1;
-//    entries_.reserve(size_);
-//    /*
-//     * if data_ file exists, we need to rebuild entries_ from it and offset_
-//     */
-//    for (int i = 0; i < size_; i++) {
-//        int entry_head = offset_[i];
-//        int entry_tail = offset_[i + 1];
-//        // read from file with [entry_head, entry_tail)
-//        string data = data_.read_from_offset(entry_head, entry_tail - entry_head);
-//        rpc_Entry entry;
-//        entry.ParseFromString(data);
-//        entries_.push_back(entry);
-//    }
-//}
 Entries::Entries(int port) : data_(string(Consts::data_path) + string(".") + std::to_string(port)) {
     path_offset_ = string(Consts::offset_path) + string(".") + std::to_string(port);
-    if (!file_exists(path_offset_.c_str())) {
-        //needn't open the file, open it before flush
-        offset_.push_back(0);
-    } else {
-        ifstream is(path_offset_, std::ios::binary);
-        boost::archive::binary_iarchive iar(is);
-        iar >> offset_;
-    }
+    Log_debug << "调试阶段，每次都从头开始";
+    offset_.push_back(0);
+
     size_ = offset_.size() - 1;
     entries_.reserve(size_);
     /*
@@ -68,6 +43,31 @@ Entries::Entries(int port) : data_(string(Consts::data_path) + string(".") + std
         entries_.push_back(entry);
     }
 }
+//Entries::Entries(int port) : data_(string(Consts::data_path) + string(".") + std::to_string(port)) {
+//    path_offset_ = string(Consts::offset_path) + string(".") + std::to_string(port);
+//    if (!file_exists(path_offset_.c_str())) {
+//        //needn't open the file, open it before flush
+//        offset_.push_back(0);
+//    } else {
+//        ifstream is(path_offset_, std::ios::binary);
+//        boost::archive::binary_iarchive iar(is);
+//        iar >> offset_;
+//    }
+//    size_ = offset_.size() - 1;
+//    entries_.reserve(size_);
+//    /*
+//     * if data_ file exists, we need to rebuild entries_ from it and offset_
+//     */
+//    for (int i = 0; i < size_; i++) {
+//        int entry_head = offset_[i];
+//        int entry_tail = offset_[i + 1];
+//        // read from file with [entry_head, entry_tail)
+//        string data = data_.read_from_offset(entry_head, entry_tail - entry_head);
+//        rpc_Entry entry;
+//        entry.ParseFromString(data);
+//        entries_.push_back(entry);
+//    }
+//}
 
 int Entries::size() {
     return size_;

@@ -263,22 +263,24 @@ string RaftServer::build_rpc_ae_string(const tuple<string, int> &server) {
     rpc.set_port(port_);
 
     int index_to_send = nextIndex_[server];
+
+    // set prevlog_term
     if (index_to_send > 0) {
-        rpc_Entry prev_entry = entries_.get(index_to_send - 1);
-//            Log_debug << "the prev entry is:" << entry2str(prev_entry);
-        int prev_term = prev_entry.term();
-        rpc.set_prelog_term(prev_term);
-        if (index_to_send == entries_.size()) {
-            //empty rpc as HB
-        } else {
-            const rpc_Entry &entry = entries_.get(index_to_send);
-            rpc_Entry *entry_to_send = rpc.add_entry();
-            entry_to_send->set_term(entry.term());
-            entry_to_send->set_msg(entry.msg());
-            entry_to_send->set_index(entry.index());
-        }
-    } else { //(index_to_send < 0)
+        const rpc_Entry &prev_entry = entries_.get(index_to_send - 1);
+        rpc.set_prelog_term(prev_entry.term());
+    } else {
         rpc.set_prelog_term(-1);
+    }
+
+    // set entry if any
+    if (index_to_send == entries_.size()) {
+        //empty rpc as HB
+    } else {
+        const rpc_Entry &entry = entries_.get(index_to_send);
+        rpc_Entry *entry_to_send = rpc.add_entry();
+        entry_to_send->set_term(entry.term());
+        entry_to_send->set_msg(entry.msg());
+        entry_to_send->set_index(entry.index());
     }
     string msg;
     rpc.SerializeToString(&msg);
@@ -752,6 +754,7 @@ inline void RaftServer::follower_update_commit_index(int remote_commit_index, in
 
 
 void RaftServer::write_resp_apply_call(int entry_index, const string res_str) {
+    Log_debug << "begin, entry_index: "<<entry_index;
     const auto &remote_addr = entryIndex_to_socketAddr_map_[entry_index];
     network_.make_rpc_call(RESP_CLIENT_APPLY, remote_addr, res_str);
 }

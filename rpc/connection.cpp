@@ -5,6 +5,7 @@
 #include "connection.h"
 #include "../util.h"
 #include "rpc.h"
+#include "rpc_to_string.h"
 
 connection::connection(const tuple<string, int> &remote_server_addr, boost::asio::io_service &ioContext, RPC &rpc) :
         socket_(ioContext),
@@ -15,6 +16,7 @@ connection::connection(const tuple<string, int> &remote_server_addr, boost::asio
 }
 
 void connection::connect(std::function<void()> cb, const string &msg) {
+    Log_trace << "begin, async connect begin, a cb is about to called, and a msg is about to send remote: " << remote_addr_str();
     auto self = shared_from_this();
     boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::address::from_string(remote_addr_), (unsigned short) remote_port_);
     socket_.async_connect(endpoint, [self, cb, msg](const boost::system::error_code &error) {
@@ -22,6 +24,9 @@ void connection::connect(std::function<void()> cb, const string &msg) {
         if (error) {
             Log_error << "async_connect, error: " << error.message();
         } else {
+            const auto &lp = self->socket_.local_endpoint();
+            self->local_addr_ = lp.address().to_string();
+            self->local_port_ = lp.port();
             Log_info << "connected to: " << self->remote_addr_str() << ", local: " << self->local_addr_str(); //
             self->read_header();
             cb();
@@ -43,7 +48,7 @@ connection::connection(tcp::socket socket, RPC &rpc) :
         const auto &local_peer = socket_.local_endpoint();
         local_addr_ = local_peer.address().to_string();
         local_port_ = local_peer.port();
-        Log_info << "connection between local " << local_addr_ << ":" << local_port_ << " and remote " << remote_addr_ << ":" << remote_port_ << "constructed";
+        Log_info << "connection between local " << local_addr_ << ":" << local_port_ << " and remote " << remote_addr_ << ":" << remote_port_ << " constructed";
     } catch (std::exception &exp) {
         Log_error << "error happend when constructing an connection: " << exp.what();
     }
@@ -82,7 +87,9 @@ void connection::read_body(const boost::system::error_code &error, size_t bytes_
         auto sp = shared_from_this();
         char char_msg_len[5] = "";
         memcpy(char_msg_len, header_, 4);
+
         int msg_len = atoi(char_msg_len);
+        Log_debug << "msg_len is " << msg_len;
         boost::asio::async_read(socket_, boost::asio::buffer(data_, msg_len), [sp](const boost::system::error_code &error, size_t bytes_transferred) {
             sp->body_callback(error, bytes_transferred);
         });
@@ -96,6 +103,10 @@ void connection::body_callback(const boost::system::error_code &error, size_t by
         throw_line("我们这里暂时让程序崩溃"); //这是完全有可能的，比如对面关闭了进程，需要处理
     } else {
         auto sp = shared_from_this();
+//        std::cout.write(data_, bytes_transferred) << std::endl;
+
+
+
         rpc_.process_msg(data_, bytes_transferred, sp->remote_peer_);
     }
 }
