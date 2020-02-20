@@ -754,9 +754,11 @@ inline void RaftServer::follower_update_commit_index(int remote_commit_index, in
 
 
 void RaftServer::write_resp_apply_call(int entry_index, const string res_str) {
-    Log_debug << "begin, entry_index: "<<entry_index;
-    const auto &remote_addr = entryIndex_to_socketAddr_map_[entry_index];
-    network_.make_rpc_call(RESP_CLIENT_APPLY, remote_addr, res_str);
+    Log_debug << "begin, entry_index: " << entry_index;
+    if (state_ == primary) {  //follower_update_index will call a chain to this function finally, then it will try to connection :0, that will raise exception when constructing endpoint
+        const auto &remote_addr = entryIndex_to_socketAddr_map_[entry_index];
+        network_.make_rpc_call(RESP_CLIENT_APPLY, remote_addr, res_str);
+    }
 }
 
 void RaftServer::write_resp_query_call(const std::tuple<string, int> &addr, const string res_str) {
