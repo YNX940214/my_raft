@@ -78,10 +78,12 @@ void connection::read_body(const boost::system::error_code &error, size_t bytes_
     Log_trace << "begin, error: " << error.message() << ", bytes: " << bytes_transferred;
     if (error) {
         if (error == boost::asio::error::eof) {
-            Log_error << "error: " << error.message();
+            Log_info << "error: " << error.message();
             rpc_.remove(remote_peer_);
         } else {
-            throw_line(error.message()); //这是完全有可能的，比如对面关闭了进程，需要处理
+            rpc_.remove(remote_peer_);
+            Log_info << "connection error: " << error.message();
+//            throw_line(error.message()); //这是完全有可能的，比如对面关闭了进程，需要处理
         }
     } else {
         auto sp = shared_from_this();
