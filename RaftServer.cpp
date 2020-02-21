@@ -140,7 +140,7 @@ void RaftServer::trans2F(int term) {
         throw_line("trans2F在一开始已经执行了cancel_all_timers函数，所以这里不应该有waiting_count=0");
     }
     candidate_timer_.async_wait([this](const boost::system::error_code &error) {
-        Log_trace << "handler in trans2F's candidate_timers expired, error: " << error.message();
+        Log_trace << "handler in trans2F's candidate_timers called, error: " << error.message();
         if (error) {
             if (error == boost::asio::error::operation_aborted) {
                 //throw_line("所有的handler通过set timer特殊值的方式取消，应该不可能出现operation_aborted");

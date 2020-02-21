@@ -1,5 +1,6 @@
 debug
-next_index有bug导致 entry从0到1，也不能真确的发出AE
+next_index有bug导致 entry从0到1，也不能真确的发出AE（总算暂时没了）
+    下一个bug是当P挂掉，另一个F变成P的时候，没有真确的set commint index（设置成了-1，在AE给另一个F的时候导致对方commit_index减少crash)
 
 
 debug

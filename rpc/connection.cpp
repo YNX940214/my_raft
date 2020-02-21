@@ -24,7 +24,6 @@ void connection::connect(std::function<void()> cb, const string &msg) {
         if (error) {
             Log_error << "async_connect, error: " << error.message();
         } else {
-            Log_debug << "local called";
             const auto &lp = self->socket_.local_endpoint();
             self->local_addr_ = lp.address().to_string();
             self->local_port_ = lp.port();
@@ -41,13 +40,11 @@ connection::connection(tcp::socket socket, RPC &rpc) :
         socket_(std::move(socket)),
         rpc_(rpc) {
     try {
-        Log_debug << "remote_ep called";
         const auto &remote_peer = socket_.remote_endpoint();
         remote_addr_ = remote_peer.address().to_string();
         remote_port_ = remote_peer.port();
         remote_peer_ = std::make_tuple(remote_addr_, remote_port_);
 
-        Log_debug << "local_ep called";
         const auto &local_peer = socket_.local_endpoint();
         local_addr_ = local_peer.address().to_string();
         local_port_ = local_peer.port();
@@ -118,12 +115,11 @@ void connection::body_callback(const boost::system::error_code &error, size_t by
 void connection::deliver(const string &msg) {
     Log_trace << "begin, remote: " << remote_addr_str() << ", local: " << local_addr_str();
     boost::asio::async_write(socket_, boost::asio::buffer(msg), [this](const boost::system::error_code &error, std::size_t bytes_transferred) {
-        Log_trace << "begin";
         if (error) {
             Log_error << "deliver failed, error: " << error.message();
             rpc_.remove(remote_peer_);
         } else {
-            Log_trace << "succeed";
+            Log_trace << "deliever succeed";
         }
     });
 }
