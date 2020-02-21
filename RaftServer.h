@@ -97,7 +97,7 @@ private:
     //我们必须相信主传来的remote_commit_index,因为当从accept 一个ae的时候，这个ae是验证过preLog的term的，也就是说prelog已经全部想等了，
     //首先，如果主不判断follower_save_index就直接把集群已经commit的index传来，那么commit_index是可能>= F's entry size, 但是从可以通过与自己的entry size比较来更新commit index，
     // 不过我选择在主用follower_saved_index做一次判断再发来commit_index，做一个鱼类，让从暴露出我们的逻辑问题
-    inline void follower_update_commit_index(int remote_commit_index, int remote_prelog_index);
+    inline void follower_update_commit_index(int remote_commit_index);
 
 
     void write_resp_apply_call(int entry_index, const string res_str);

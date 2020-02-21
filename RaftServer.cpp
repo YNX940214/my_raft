@@ -180,6 +180,7 @@ void RaftServer::trans2P() {
         Follower_saved_index[server] = -1;
     }
 
+    Follower_saved_index[server_] = entry_size - 1;
     for (const auto &server : configuration_) {
         int port = std::get<1>(server);
         if (port != port_) {
@@ -270,21 +271,16 @@ string RaftServer::build_rpc_ae_string(const tuple<string, int> &server) {
     current_rpc_lsn_[server] = server_current_rpc_lsn + 1;
     rpc.set_lsn(server_current_rpc_lsn);
     rpc.set_term(term_);
-    //这里我们在主比较follower_saved_index和commit_index，发送其中更小的那个，从在收到的时候不判断commit_index与entry size的大小
-    //做一个鱼雷
-    int commit_index_to_send = commit_index_;
-    {
-        int F_saved = Follower_saved_index[server];
-        if (commit_index_ > F_saved) {
-            commit_index_to_send = F_saved;
-        }
-    }
-    rpc.set_commit_index(commit_index_to_send);
+
+    /*
+     * 直接无脑设置成commit_index_就行了，让follower处理，之前的逻辑如果一个P挂了，F变成P，commit_index是-1
+     */
+    rpc.set_commit_index(commit_index_);
     rpc.set_ip(ip_);
     rpc.set_port(port_);
 
     int index_to_send = nextIndex_[server];
-
+    rpc.set_prelog_index(index_to_send - 1);
     // set prevlog_term
     if (index_to_send > 0) {
         const rpc_Entry &prev_entry = entries_.get(index_to_send - 1);
@@ -459,10 +455,15 @@ void RaftServer::react2ae(AppendEntryRpc rpc_ae) {
     Log_debug << "begin";
     int remote_term = rpc_ae.term();
     int prelog_term = rpc_ae.prelog_term();
-    int commit_index = rpc_ae.commit_index();
+    int prelog_index = rpc_ae.prelog_index();
+    int rpc_commit_index = rpc_ae.commit_index();
     int rpc_lsn = rpc_ae.lsn();
     bool is_empty_ae = rpc_ae.entry_size() == 0;
     std::tuple<string, int> server = std::make_tuple(rpc_ae.ip(), rpc_ae.port());
+    Log_debug << "rpc_ae_entry_size " << rpc_ae.entry_size();
+    if (rpc_ae.entry_size() > 1) {
+        throw_line("entry_size 不能大于1");
+    }
 
     // 这行错了!       assert(commitIndex <= prelog_index); 完全有可能出现commitIndex比prelog_index大的情况
     if (term_ > remote_term) {
@@ -475,66 +476,67 @@ void RaftServer::react2ae(AppendEntryRpc rpc_ae) {
         int pre_local_term = term_;
         trans2F(remote_term);//会设置定时器，所以此函数不需要设置定时器了
 
-
+        //注意check 顺序： term，rpc_lsn，log， then do something
         //if term_ is updated in trans2F, then both lsn are clean, if not, the store follower_saved_index is still valid
         if (should_ignore_remote_rpc(server, rpc_lsn)) {
             return;
         }
 
         /*
+         * (下面的注释中的逻辑deprecatd，因为在执行任何modify之前必须通过prelog_term和prelog_index的检查，即便是有需要回滚的log，也必须在修改之前回滚在modify commit index
+         * 但是注意！ ！！！！！update_commit_index不能超过 entry size-1 ！！！！！！！！！
+         * )
          一开始想法是commitIndex直接赋值给本地commitIndex，然后本地有一个线程直接根据本第commitIndex闷头apply to stateMachine就行了（因为两者完全正交），
          但是一想不对，因为rpc的commitIndex可能比prelog_index大，假设本地和主同步的entry是0到20，21到100都是stale的entry，rpc传来一个commitIndex为50，prelog_index为80（还没走到真确的20），
          难道那个线程就无脑把到80的entry给apply了？所以本地的commitIndex只能是
          */
-        int rpc_ae_entry_size = rpc_ae.entry_size();
-        Log_debug << "rpc_ae_entry_size " << rpc_ae_entry_size;
-        if (rpc_ae_entry_size == 0) { // empty ae, means that this primary thinks this follower has already catch up with it
-            if (pre_local_term == remote_term) {  //为了解决在从跟上主的log之后，主发来空的AE不能更新从commit index，但是又不能让（本应该被回滚的主）更新commit_index
-                follower_update_commit_index(commit_index, INT32_MAX); //无脑接受commit_index
+
+        if (prelog_index == -1) {
+            if (prelog_term != -1) {
+                throw_line("prelog_index为-1，那么prelog_term也应该是-1")
             }
-            make_resp_ae(true, "成功insert", server, rpc_lsn, is_empty_ae);
-            return;
-        } else if (rpc_ae_entry_size == 1) {
-            const raft_rpc::rpc_Entry &entry = rpc_ae.entry(0);
-            int prelog_index = entry.index() - 1;
-            if (prelog_term == -1) { //see AE, we set prelog_term to -1 as this is the index0 log of primary, the follower has to accept it
-                entries_.insert(0, entry);
-                // we choose the smaller one to be the commit index, the logic is in entries_.update_commit_index function
-                follower_update_commit_index(commit_index, prelog_index);
-                make_resp_ae(true, "成功insert", server, rpc_lsn, is_empty_ae);
-                return;
-            } else {
-                int last_index = entries_.size() - 1;
-                if (last_index < prelog_index) {
-                    make_resp_ae(false, "react2ae, term is ok, but follower's last entry index is " + to_string(last_index) + ", but prelog_index is " + to_string(prelog_index), server, rpc_lsn, is_empty_ae);
-                    return;
-                } else { // if (last_index >= prelog_index)  注意> 和 = 的情况是一样的，（至少目前我是这么认为的）
-                    int term_of_local_entry_with_prelog_index = entries_.get(prelog_index).term();
-                    if (term_of_local_entry_with_prelog_index == prelog_term) {
-                        entries_.insert(prelog_index + 1, entry);
-                        // we choose the smaller one to be the commit index, the logic is in entries_.update_commit_index function
-                        follower_update_commit_index(commit_index, prelog_index);
-                        make_resp_ae(true, "成功insert", server, rpc_lsn, is_empty_ae);
-                        return;
-                    } else if (term_of_local_entry_with_prelog_index < prelog_term) {
-                        // easy to make an example
-                        make_resp_ae(false, "react2ae, term is ok, but follower's entry's term" + to_string(term_of_local_entry_with_prelog_index) + "of prelog_index " + to_string(prelog_index) + "is SMALLER than rpc's prelog_term" + to_string(prelog_term), server, rpc_lsn, is_empty_ae);
-                        return;
-                    } else {
-                        make_resp_ae(false, "react2ae, term is ok, but follower's entry's term" + to_string(term_of_local_entry_with_prelog_index) + "of prelog_index " + to_string(prelog_index) + "is BIGGER than rpc's prelog_term" + to_string(prelog_term), server, rpc_lsn, is_empty_ae);
-                        return;
-                        /*
-                         * 1. 5 nodes with term 1, index [2]
-                         * 2. a trans P (term2), index[1 2], but copy to none
-                         * 3. b trans P (term3), index[1,3], copy to c
-                         * 4. a trans P (term4), and receive client, index [1,2,4], then copy to all, prelog_term is 2,prelog_index is 1,
-                         * so for b and c, index 1 's term is 3, but remote prelog_term is 2, is completely ok.
-                         */
-                    }
-                }
-            }
+            // [0] or empty AE of which the P has no entry yet, in no cases should follower not accept the AE in this step
         } else {
-            throw_line("rpc_ae's entry size is bigger 1");
+            if (prelog_index >= entries_.size()) {
+                make_resp_ae(false, "react2ae, term is ok, but follower's entry size is " + to_string(entries_.size()) + ", but prelog_index is " + to_string(prelog_index), server, rpc_lsn, is_empty_ae);
+                return;
+            }
+            const rpc_Entry &prev_entry = entries_.get(prelog_index);
+            int term_of_local_entry_with_prelog_index = prev_entry.term();
+            if (prelog_term != term_of_local_entry_with_prelog_index) {
+                make_resp_ae(false, "react2ae, term is ok, but follower's entry of index(prelog_index) " + to_string(prelog_index) + " whose term " + to_string(term_of_local_entry_with_prelog_index) + "!= than rpc's prelog_term" + to_string(prelog_term), server, rpc_lsn, is_empty_ae);
+                return;
+            }
+            Log_debug << "log check passed";
+        }
+
+        /*
+         * Be careful:
+         * 1. two separte chains, don't join them !
+         * 2. update_commit_index can only be called after entries had been modified
+         */
+        if (is_empty_ae) {
+            /* if empty AE, only two scenes: if both scenes, F's entry size is >= rpc_commit_index
+             * 1. no entry has ever been inserted to P
+             * 2. follower catches up with P
+             */
+            if (entries_.size() < rpc_commit_index) {
+                throw_line("local commit_index should >= rpc_commit_index in this scene, see comment for explanation");
+            }
+            // no entry is to be modify, just call follower_update_commit_index
+            follower_update_commit_index(rpc_commit_index);
+            make_resp_ae(true, "empty rpc", server, rpc_lsn, is_empty_ae);
+            return;
+        } else {
+            const raft_rpc::rpc_Entry &entry = rpc_ae.entry(0);
+            if (entry.index() != prelog_index + 1) {
+                throw_line("entry's index should == prelog_index + 1");
+            }
+            entries_.insert(prelog_index + 1, entry);
+            // if rpc_commit_index >=  entry size, that's ok,  follower_update_commit_index will only update_commit_index to entry.size()-1
+            follower_update_commit_index(rpc_commit_index);
+            make_resp_ae(true, "entries modified", server, rpc_lsn, is_empty_ae);
+            return;
         }
     }
 }
@@ -689,6 +691,10 @@ inline void RaftServer::primary_deal_resp_ae_with_same_term(const tuple<string, 
             if (last_send_index == entries_.size()) {
                 //don't nextIndex_[server] = last_send_index + 1;
                 Log_debug << "primary has send all index that can be sent, just wait for retry time to expire to send an empty AE(remember check the follower_saved_index)";
+                /*
+                 * scene: A(P) B C all with [10,10,10], A crashed, B became P, B send empty AE to C, C resp ok to B, if B doesn't update_f
+                 */
+                primary_update_commit_index(server, last_send_index - 1);
             } else {
                 /* why we must known the context of rpc (specifically, when received a resp_rpc, we must known the call rpc), why? here is the scene:
                  * Scene 1:
@@ -703,6 +709,8 @@ inline void RaftServer::primary_deal_resp_ae_with_same_term(const tuple<string, 
                  */
                 if (resp_ae.is_empty_ae()) {  //last AE is empty, a HB
                     Log_debug << "scence 2 happend";
+                    primary_update_commit_index(server, last_send_index - 1); //be carefull, we only update the follower's index to nextIndex[server]-1, because last send AE is empty
+
                 } else {   //last send is AE with entry
                     nextIndex_[server] = last_send_index + 1;
                     Log_debug << "primary's nextIndex of " << server2str(server) << " is set to " << nextIndex_[server];
@@ -783,18 +791,26 @@ inline void RaftServer::primary_update_commit_index(const tuple<string, int> &se
     apply_to_state_machine(commit_index_);
 }
 
-inline void RaftServer::follower_update_commit_index(int remote_commit_index, int remote_prelog_index) {
-    Log_trace << "begin: remote_commit_index: " << remote_commit_index << ", local commit_index: " << commit_index_ << ", remote_prelog_index: " << remote_prelog_index;
-    int smaller_index = smaller(remote_commit_index, remote_prelog_index);
-    if (smaller_index > commit_index_) {
-        commit_index_ = smaller_index;
-        Log_debug << "set commit_index to " << smaller_index;
-        apply_to_state_machine(commit_index_);
-    } else if (smaller_index == commit_index_) {
-
+inline void RaftServer::follower_update_commit_index(int remote_commit_index) {
+    /*
+     * follower_update_commit_index is runned after the entry has been inserted to its index, so the stale entry should has already be rollbacked
+     */
+    Log_trace << "begin: remote_commit_index: " << remote_commit_index << ", local commit_index: " << commit_index_ << ", local entry size: " << entries_.size();
+    int prev_commit_index = commit_index_;
+    int latest_index = entries_.size() - 1;
+    if (latest_index < remote_commit_index) {
+        Log_info << "latest index: " << latest_index << " < remote_commint_index: " << remote_commit_index << " , we can't only commit to entry size() -1 at most";
+        commit_index_ = latest_index;
     } else {
-        string err = "remote_commit_index " + std::to_string(smaller_index) + " is smaller than local commit_index " + std::to_string(commit_index_) + ", this is impossible";
-        throw_line(err);
+        commit_index_ = remote_commit_index;
+    }
+    if (commit_index_ < prev_commit_index) {
+        throw_line("commit index can only grow, never decrease");
+    } else if (commit_index_ > prev_commit_index) {
+        Log_debug << "update commit_index_ from " << prev_commit_index << " to " << commit_index_;
+        apply_to_state_machine(commit_index_);
+    } else {
+        //do nothing
     }
 }
 

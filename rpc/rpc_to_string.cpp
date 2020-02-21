@@ -17,6 +17,7 @@ string rpc_ae2str(const AppendEntryRpc &ae) {
     }
 
     oss << "\nterm: " << ae.term()
+        << "\nprelog_index: "<<ae.prelog_index()
         << "\nprelog_term: " << ae.prelog_term()
         << "\ncommit_index: " << ae.commit_index()
         << "\nlsn: " << ae.lsn()
