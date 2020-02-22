@@ -58,8 +58,11 @@ int smaller(int a, int b) {
 bool file_exists(const string &path) {
     FILE *fp = fopen(path.c_str(), "r");
     if (fp) {
+        std::cout << "file: " << path << " exists" << std::endl;
         return true;
     } else {
+        std::cout << "file: " << path << " doesnt' exists" << std::endl;
+
         return false;
     }
 }

@@ -22,7 +22,6 @@ public:
 
     const rpc_Entry &get(int index);
 
-    void append(const rpc_Entry &entry);
 
     /*
      * we only write the disk with write op, for the read op, an in memory data structure is maintained

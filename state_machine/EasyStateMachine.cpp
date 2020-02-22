@@ -40,7 +40,9 @@ string EasyStateMachine::apply(const string &encoded_apply_str) {
     try {
         mock_state_machine_[key] = v;
         resp.set_ok(true);
+        Log_debug << "sm' key: " << key << " is set to " << v;
     } catch (const std::exception &ex) {
+        Log_debug << "sm error";
         resp.set_ok(false);
     }
     string resp_str;

@@ -82,7 +82,7 @@ void RaftServer::load_config_from_file() {
         if (string(str).size() == 0)  //丑陋，不过在同一台电脑上在clion上运行居然和在bash里面运行结果一样，奇怪
             break;
         auto vec = split_str_boost(str, ':');
-        cout << "the size is: " << vec.size() << endl;
+        cout << "the cluster node number is: " << vec.size() << endl;
         if (vec.size() != 2) {
             throw_line(string("failed to read the config file line: ") + str);
         }
@@ -818,8 +818,10 @@ inline void RaftServer::follower_update_commit_index(int remote_commit_index) {
 void RaftServer::write_resp_apply_call(int entry_index, const string res_str) {
     Log_debug << "begin, entry_index: " << entry_index;
     if (state_ == primary) {  //follower_update_index will call a chain to this function finally, then it will try to connection :0, that will raise exception when constructing endpoint
-        const auto &remote_addr = entryIndex_to_socketAddr_map_[entry_index];
-        network_.make_rpc_call(RESP_CLIENT_APPLY, remote_addr, res_str);
+        auto iter = entryIndex_to_socketAddr_map_.find(entry_index);
+        if (iter != entryIndex_to_socketAddr_map_.end()){
+            network_.make_rpc_call(RESP_CLIENT_APPLY, iter->second,res_str);
+        }
     }
 }
 
